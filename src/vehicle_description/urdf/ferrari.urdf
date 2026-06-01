@@ -1,0 +1,315 @@
+<robot name="unnamed" version="1.0">
+  <!-- ===== 后轮关节 ===== -->
+  <joint name="wheel_lr" type="continuous">
+    <limit lower="0" upper="0" effort="50" velocity="100"/>
+    <origin rpy="0.00000 0.00000 0.00000" xyz="0.87294 1.31209 -0.21374"/>
+    <parent link="body_link"/>
+    <child link="wheel_lr_link.001"/>
+    <axis xyz="1.00000 0.00000 0.00000"/>
+  </joint>
+  <joint name="wheel_rr" type="continuous">
+    <limit lower="0" upper="0" effort="50" velocity="100"/>
+    <origin rpy="0.00000 0.00000 0.00000" xyz="-0.86987 1.30363 -0.21374"/>
+    <parent link="body_link"/>
+    <child link="wheel_rr_link.001"/>
+    <axis xyz="1.00000 0.00000 0.00000"/>
+  </joint>
+
+  <!-- ===== 前轮转向节关节 ===== -->
+  <joint name="steering_lf" type="revolute">
+    <limit lower="-0.6" upper="0.6" effort="100" velocity="10"/>
+    <origin rpy="0.00000 0.00000 0.00000" xyz="0.80255 -1.31494 -0.21374"/>
+    <parent link="body_link"/>
+    <child link="steering_lf_link"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+  <joint name="steering_rf" type="revolute">
+    <limit lower="-0.6" upper="0.6" effort="100" velocity="10"/>
+    <origin rpy="0.00000 0.00000 0.00000" xyz="-0.77618 -1.34132 -0.21374"/>
+    <parent link="body_link"/>
+    <child link="steering_rf_link"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+
+  <!-- ===== 前轮滚动关节（挂在转向节上） ===== -->
+  <joint name="wheel_lf" type="continuous">
+    <limit lower="0" upper="0" effort="50" velocity="100"/>
+    <origin rpy="0.00000 0.00000 0.00000" xyz="0 0 0"/>
+    <parent link="steering_lf_link"/>
+    <child link="wheel_lf_link.001"/>
+    <axis xyz="1.00000 0.00000 0.00000"/>
+  </joint>
+  <joint name="wheel_rf" type="continuous">
+    <limit lower="0" upper="0" effort="50" velocity="100"/>
+    <origin rpy="0.00000 0.00000 0.00000" xyz="0 0 0"/>
+    <parent link="steering_rf_link"/>
+    <child link="wheel_rf_link.002"/>
+    <axis xyz="1.00000 0.00000 0.00000"/>
+  </joint>
+
+  <!-- ===== body_link ===== -->
+  <link name="body_link">
+    <collision name="body_collision">
+      <origin rpy="0.00000 0.00000 0.00000" xyz="0.00000 0.00000 0.00000"/>
+      <geometry>
+        <mesh filename="package://vehicle_description/meshes/body.001.stl" scale="1 1 1"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <inertia ixx="32.01585" ixy="-0.00239" ixz="0.01015" iyy="6.33257" iyz="-1.32537" izz="35.64313"/>
+      <origin rpy="0.00000 0.00000 0.00000" xyz="0.00000 0.00000 0.00000"/>
+      <mass value="50.00000"/>
+    </inertial>
+    <visual name="body">
+      <origin rpy="0.00000 0.00000 0.00000" xyz="0.00000 0.00000 0.00000"/>
+      <geometry>
+        <mesh filename="package://vehicle_description/meshes/body.001.stl" scale="1 1 1"/>
+      </geometry>
+      <material name="body_color">
+        <color rgba="0.2 0.4 0.8 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <!-- ===== 转向节 link（轻量中间件） ===== -->
+  <link name="steering_lf_link">
+    <inertial>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.1"/>
+    </inertial>
+  </link>
+  <link name="steering_rf_link">
+    <inertial>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.1"/>
+    </inertial>
+  </link>
+
+  <!-- ===== LiDAR link（挂在 body 上方） ===== -->
+  <joint name="lidar_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0 1.7"/>
+    <parent link="body_link"/>
+    <child link="lidar_link"/>
+  </joint>
+  <link name="lidar_link"/>
+
+  <!-- ===== 轮子 link ===== -->
+  <link name="wheel_lf_link.001">
+    <collision name="wheel_lf_link_collision">
+      <origin rpy="0.00000 1.57080 0.00000" xyz="-0.00111 0.00181 -0.00135"/>
+      <geometry>
+        <cylinder radius="0.2820" length="0.16775"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <inertia ixx="1.08474" ixy="-0.00013" ixz="0.00012" iyy="0.66418" iyz="0.00012" izz="0.66436"/>
+      <origin rpy="0.00000 0.00000 0.00000" xyz="0.00000 -0.00000 0.00000"/>
+      <mass value="2.00000"/>
+    </inertial>
+    <visual name="wheel_lf_link">
+      <origin rpy="0.00000 0.00000 0.00000" xyz="0.00000 -0.00000 0.00000"/>
+      <geometry>
+        <mesh filename="package://vehicle_description/meshes/wheel_lf_link.stl" scale="1 1 1"/>
+      </geometry>
+      <material name="wheel_color">
+        <color rgba="0.15 0.15 0.15 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <link name="wheel_lr_link.001">
+    <collision name="wheel_lr_link_collision">
+      <origin rpy="0.00000 1.57080 0.00000" xyz="-0.00129 0.00210 -0.00157"/>
+      <geometry>
+        <cylinder radius="0.2820" length="0.16775"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <inertia ixx="1.08474" ixy="-0.00013" ixz="0.00012" iyy="0.66418" iyz="0.00012" izz="0.66436"/>
+      <origin rpy="0.00000 0.00000 0.00000" xyz="-0.00000 -0.00000 0.00000"/>
+      <mass value="2.00000"/>
+    </inertial>
+    <visual name="wheel_lr_link">
+      <origin rpy="0.00000 0.00000 0.00000" xyz="-0.00000 -0.00000 0.00000"/>
+      <geometry>
+        <mesh filename="package://vehicle_description/meshes/wheel_lr_link.stl" scale="1 1 1"/>
+      </geometry>
+      <material name="wheel_color">
+        <color rgba="0.15 0.15 0.15 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <link name="wheel_rf_link.002">
+    <collision name="wheel_rf_link_collision">
+      <origin rpy="0.00000 1.57080 0.00000" xyz="-0.01488 -0.00108 -0.01327"/>
+      <geometry>
+        <cylinder radius="0.2820" length="0.16775"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <inertia ixx="1.08474" ixy="0.00013" ixz="-0.00012" iyy="0.66418" iyz="0.00012" izz="0.66436"/>
+      <origin rpy="0.00000 0.00000 0.00000" xyz="-0.00000 -0.00000 0.00000"/>
+      <mass value="2.00000"/>
+    </inertial>
+    <visual name="wheel_rf_link">
+      <origin rpy="0.00000 0.00000 0.00000" xyz="-0.00000 -0.00000 0.00000"/>
+      <geometry>
+        <mesh filename="package://vehicle_description/meshes/wheel_rf_link.001.stl" scale="1 1 1"/>
+      </geometry>
+      <material name="wheel_color">
+        <color rgba="0.15 0.15 0.15 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <link name="wheel_rr_link.001">
+    <collision name="wheel_rr_link_collision">
+      <origin rpy="0.00000 1.57080 0.00000" xyz="0.00128 0.00210 -0.00157"/>
+      <geometry>
+        <cylinder radius="0.2820" length="0.16775"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <inertia ixx="1.08474" ixy="0.00013" ixz="-0.00012" iyy="0.66418" iyz="0.00012" izz="0.66436"/>
+      <origin rpy="0.00000 0.00000 0.00000" xyz="-0.00000 -0.00001 0.00000"/>
+      <mass value="2.00000"/>
+    </inertial>
+    <visual name="wheel_rr_link">
+      <origin rpy="0.00000 0.00000 0.00000" xyz="-0.00000 -0.00001 0.00000"/>
+      <geometry>
+        <mesh filename="package://vehicle_description/meshes/wheel_rr_link.stl" scale="1 1 1"/>
+      </geometry>
+      <material name="wheel_color">
+        <color rgba="0.15 0.15 0.15 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <!-- ===== 轮子摩擦 ===== -->
+  <gazebo reference="wheel_lf_link.001">
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+  </gazebo>
+  <gazebo reference="wheel_lr_link.001">
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+  </gazebo>
+  <gazebo reference="wheel_rf_link.002">
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+  </gazebo>
+  <gazebo reference="wheel_rr_link.001">
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+  </gazebo>
+
+  <!-- ===== 后轮差速驱动 ===== -->
+  <gazebo>
+    <plugin name="diff_drive" filename="libgazebo_ros_diff_drive.so">
+      <ros>
+        <command_topic>/cmd_vel</command_topic>
+        <odometry_topic>/odom</odometry_topic>
+        <odometry_frame>odom</odometry_frame>
+        <robot_base_frame>body_link</robot_base_frame>
+      </ros>
+      <update_rate>30.0</update_rate>
+      <left_joint>wheel_lr</left_joint>
+      <right_joint>wheel_rr</right_joint>
+      <wheel_separation>1.74</wheel_separation>
+      <wheel_diameter>0.564</wheel_diameter>
+      <wheel_torque>20.0</wheel_torque>
+      <wheel_acceleration>10.0</wheel_acceleration>
+      <publish_odom>true</publish_odom>
+      <publish_odom_tf>true</publish_odom_tf>
+      <publish_wheel_tf>false</publish_wheel_tf>
+    </plugin>
+  </gazebo>
+
+  <!-- ===== 2D LiDAR 传感器 ===== -->
+  <gazebo reference="body_link">
+    <sensor name="lidar" type="ray">
+      <pose>0 0 1.7 0 0 0</pose>
+      <visualize>false</visualize>
+      <update_rate>10</update_rate>
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>720</samples>
+            <resolution>1</resolution>
+            <min_angle>-3.14159</min_angle>
+            <max_angle>3.14159</max_angle>
+          </horizontal>
+        </scan>
+        <range>
+          <min>0.1</min>
+          <max>80.0</max>
+          <resolution>0.01</resolution>
+        </range>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
+        </noise>
+      </ray>
+      <plugin name="lidar_plugin" filename="libgazebo_ros_ray_sensor.so">
+        <ros>
+          <namespace></namespace>
+          <remapping>~/out:=/scan</remapping>
+        </ros>
+        <output_type>sensor_msgs/LaserScan</output_type>
+        <frame_name>lidar_link</frame_name>
+      </plugin>
+    </sensor>
+    <material>Gazebo/Blue</material>
+  </gazebo>
+
+  <gazebo reference="wheel_lf_link.001">
+    <material>Gazebo/DarkGrey</material>
+  </gazebo>
+  <gazebo reference="wheel_lr_link.001">
+    <material>Gazebo/DarkGrey</material>
+  </gazebo>
+  <gazebo reference="wheel_rf_link.002">
+    <material>Gazebo/DarkGrey</material>
+  </gazebo>
+  <gazebo reference="wheel_rr_link.001">
+    <material>Gazebo/DarkGrey</material>
+  </gazebo>
+
+  <!-- ===== ros2_control 标签（前轮转向） ===== -->
+  <ros2_control name="GazeboSystem" type="system">
+    <hardware>
+      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+    </hardware>
+    <joint name="steering_lf">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+    </joint>
+    <joint name="steering_rf">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+    </joint>
+  </ros2_control>
+
+  <!-- ===== gazebo_ros2_control 插件 ===== -->
+  <gazebo>
+    <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
+      <robot_param>robot_description</robot_param>
+      <!-- IMPORTANT: gazebo_ros2_control reads this as a plain filesystem path,
+           NOT a URI.  Do NOT put file:// prefix here.  The launch file will
+           expand it to the absolute install path. -->
+      <parameters>@vehicle_bringup_share@/config/steering_controller.yaml</parameters>
+    </plugin>
+  </gazebo>
+</robot>

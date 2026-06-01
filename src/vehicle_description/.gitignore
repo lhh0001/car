@@ -1,0 +1,7 @@
+urdf/build/
+urdf/install/
+urdf/log/
+meshes/
+*_history.log
+*.pyc
+__pycache__/

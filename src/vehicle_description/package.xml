@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>vehicle_description</name>
+  <version>0.1.0</version>
+  <description>Vehicle URDF/XACRO models and mesh assets — no runtime code</description>
+  <maintainer email="lhh@todo.todo">lhh</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- Only dependencies needed to load/process the descriptions -->
+  <exec_depend>urdf</exec_depend>
+  <exec_depend>xacro</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

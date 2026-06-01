@@ -1,0 +1,63 @@
+name: Vehicle Simulation CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+    container:
+      image: osrf/ros:humble-desktop-full
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: src/vehicle_ws
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3-pip \
+            python3-pytest \
+            python3-colcon-common-extensions \
+            python3-rosdep
+
+      - name: Install ROS2 deps
+        run: |
+          cd src/vehicle_ws
+          rosdep init || true
+          rosdep update
+          rosdep install --from-paths src --ignore-src -y \
+            --skip-keys="python3-tk gazebo_ros gazebo_plugins gazebo_ros2_control"
+
+      - name: Build
+        run: |
+          cd src/vehicle_ws
+          . /opt/ros/humble/setup.sh
+          colcon build --packages-up-to vehicle_bringup \
+            --cmake-args -DCMAKE_BUILD_TYPE=Release
+
+      - name: Test (unit)
+        run: |
+          cd src/vehicle_ws
+          . /opt/ros/humble/setup.sh
+          . install/setup.sh
+          colcon test --packages-select vehicle_control \
+            --event-handlers console_direct+ || true
+          colcon test-result --verbose
+
+      - name: Lint (optional)
+        run: |
+          cd src/vehicle_ws
+          . /opt/ros/humble/setup.sh
+          pip install flake8 pep257
+          # Informational only — don't fail the build
+          flake8 src/vehicle_control/scripts/ --max-line-length=120 --ignore=E501,W503 || true

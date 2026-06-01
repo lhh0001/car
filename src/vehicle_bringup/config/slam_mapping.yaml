@@ -1,0 +1,20 @@
+slam_toolbox:
+  ros__parameters:
+
+    # ROS
+    odom_frame: odom
+    map_frame: map
+    base_frame: base_footprint
+    scan_topic: /scan
+    mode: mapping
+
+    # 建图参数
+    map_update_interval: 5.0
+    resolution: 0.05
+    min_laser_range: 0.1
+    max_laser_range: 30.0
+    minimum_time_interval: 0.5
+
+    # 回环检测
+    do_loop_closing: true
+    loop_search_maximum_distance: 5.0

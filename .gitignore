@@ -1,0 +1,22 @@
+# Workspace-level gitignore for ROS2 / colcon
+
+# Build artifacts
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# IDE
+.vscode/browse.vc.db*
+.vscode/.browse.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Colcon
+.colcon/
