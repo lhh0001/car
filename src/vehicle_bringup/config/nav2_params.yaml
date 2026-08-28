@@ -14,29 +14,44 @@ controller_server:
       yaw_goal_tolerance: 0.3
     controller_plugins: ["FollowPath"]
     FollowPath:
+      # ---- DWB ----
       plugin: "dwb_core::DWBLocalPlanner"
       min_vel_x: 0.0
       max_vel_x: 1.0
-      max_vel_theta: 2.0
+      max_vel_theta: 5.0
       min_speed_xy: 0.0
       max_speed_xy: 1.0
       acc_lim_x: 2.5
-      acc_lim_theta: 3.2
+      acc_lim_theta: 7.0
       decel_lim_x: -2.5
-      decel_lim_theta: -3.2
+      decel_lim_theta: -5.0
       vx_samples: 20
       vtheta_samples: 20
       sim_time: 1.7
       xy_goal_tolerance: 0.15
       trans_stopped_velocity: 0.05
-      short_circuit_trajectory_evaluation: True
-      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 0.02
-      PathAlign.scale: 32.0
-      GoalAlign.scale: 24.0
-      PathDist.scale: 32.0
-      GoalDist.scale: 24.0
-      RotateToGoal.scale: 32.0
+      short_circuit_trajectory_evaluation: False
+      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "PreferForward", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
+      PreferForward.scale: 5.0
+      BaseObstacle.scale: 0.5
+      PathAlign.scale: 80.0
+      GoalAlign.scale: 8.0
+      PathDist.scale: 60.0
+      GoalDist.scale: 8.0
+      RotateToGoal.scale: 50.0
+      # ---- RPP (备用) ----
+      # plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
+      # desired_linear_vel: 0.8
+      # max_linear_vel: 1.2
+      # min_linear_vel: 0.1
+      # lookahead_dist: 0.6
+      # min_lookahead_dist: 0.3
+      # max_lookahead_dist: 1.2
+      # transform_tolerance: 1.0
+      # use_velocity_scaled_lookahead_dist: true
+      # min_approach_linear_vel: 0.05
+      # approach_velocity_scaling_dist: 0.6
+      # use_cost_regulated_linear_velocity_scaling: false
 
 local_costmap:
   local_costmap:
@@ -73,8 +88,8 @@ local_costmap:
           inf_is_valid: False
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.3
+        cost_scaling_factor: 5.0
+        inflation_radius: 0.6
 
 global_costmap:
   global_costmap:
@@ -105,8 +120,8 @@ global_costmap:
           obstacle_max_range: 3.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.3
+        cost_scaling_factor: 5.0
+        inflation_radius: 0.6
 
 planner_server:
   ros__parameters:

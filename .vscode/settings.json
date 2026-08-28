@@ -8,5 +8,6 @@
     "python.analysis.extraPaths": [
         "/opt/ros/foxy/lib/python3.8/site-packages"
     ],
-    "ROS2.distro": "humble"
+    "ROS2.distro": "humble",
+    "cmake.sourceDirectory": "/home/lhh/vehicle_ws/src/vehicle_bringup"
 }

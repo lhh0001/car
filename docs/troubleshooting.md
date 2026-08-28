@@ -189,3 +189,127 @@ pkill -9 -f gazebo && sleep 1 && pkill -9 -f gazebo
 - **`@pkg_share@`**：展开为纯路径（无协议前缀），给 C++ 插件 `fopen()` 用
 - **不要**在 URDF 源文件中写死绝对路径（`/home/xxx/...`）
 - **不要**对 `<parameters>` 标签使用 `file://` 前缀
+
+---
+
+## 8. 加载已有地图导航：map 帧不存在
+
+**报错信息：**
+```
+Timed out waiting for transform from base_footprint to map to become available,
+tf error: Invalid frame ID "map" passed to canTransform argument target_frame
+- frame does not exist
+```
+
+**现象：** SLAM 建图模式下一切正常，但换成加载已保存地图 (`map_server`) 后，
+global_costmap 和 local_costmap 无法初始化，RViz 看不到 costmap。
+
+### 根本原因
+
+** lifecycle_manager 的 autostart 同时激活所有 lifecycle 节点，AMCL 激活时
+`/map` 话题还没数据，粒子滤波器初始化失败，导致 `map → odom` 变换永远不会发布。**
+
+SLAM 建图时不用管这个问题——slam_toolbox 不是 lifecycle 节点，自己同时发
+`/map` 和 `map → odom`，不存在激活顺序问题。
+
+但加载已有地图的链路完全不同：
+
+```
+SLAM 建图模式（没问题）:
+  /scan + /odom → slam_toolbox → /map 话题 + map→odom 变换   ← 一手包办
+
+加载地图模式（有顺序依赖）:
+  map_server → /map 话题   ← 先发地图
+                              ↓ 等 AMCL 收到 /map 后才能干活
+  AMCL → map→odom 变换     ← 后定位
+```
+
+**lifecycle_manager 同时激活它们，AMCL 拿不到 /map，原地失败，不重试。**
+
+### 调试过程
+
+1. `ros2 lifecycle get /map_server` → state=2 (inactive)，一直没被激活
+2. `ros2 lifecycle get /amcl` → 同上
+3. 手动 `ros2 lifecycle set /map_server activate`，再 `ros2 lifecycle set /amcl activate` → TF 通了
+4. 确认：激活需要顺序，manual 方式可行
+
+### 解决
+
+两个改动：
+
+1. 拆出独立的 launch 文件 `diff_drive_nav_map.launch.py`（不碰原来的 SLAM+Nav2）
+2. 新增 `activate_navigation.py`，替代 lifecycle_manager 做顺序激活：
+
+```
+map_server configure → activate
+    ↓
+等待 /map 话题出现
+    ↓
+AMCL configure → activate
+    ↓
+lifecycle_manager 激活 Nav2 其他节点
+```
+
+脚本通过 lifecycle 服务调用 (`lifecycle_msgs/srv/ChangeState`) 控制节点状态，
+**每一步都检查返回值**——之前 `cli.call(req)` 不检查返回值，
+map_server 因 YAML 路径错误 configure 失败也看不出来。
+
+### 关键代码
+
+```python
+# configure
+req.transition.id = Transition.TRANSITION_CONFIGURE  # id=1
+fut = cli.call_async(req)
+rclpy.spin_until_future_complete(self, fut)
+if not fut.result() or not fut.result().success:
+    # 失败要报出来，不能闭眼当成功
+    return False
+
+# activate
+req.transition.id = Transition.TRANSITION_ACTIVATE  # id=3
+fut = cli.call_async(req)
+rclpy.spin_until_future_complete(self, fut)
+if not fut.result() or not fut.result().success:
+    return False
+```
+
+### TF 树对照
+
+```
+SLAM 建图:
+  map → odom → base_footprint → base_link → ... → lidar_link
+  ↑ slam_toolbox 负责这个                    ↑ robot_state_publisher
+
+加载地图:
+  map → odom → base_footprint → base_link → ... → lidar_link
+  ↑ AMCL 负责这个  ↑ diff_drive 插件        ↑ robot_state_publisher
+```
+
+### 文件清单
+
+| 文件 | 作用 |
+|------|------|
+| `launch/diff_drive_nav_map.launch.py` | 导航模式 launch（加载已有地图） |
+| `scripts/activate_navigation.py` | 顺序激活 map_server → AMCL |
+| `config/nav2_params.yaml` | 补了 AMCL 参数段（粒子滤波 + 初始位姿） |
+| `launch/diff_drive_nav.launch.py` | 原文件不动（SLAM + Nav2 建图） |
+
+### 使用方式
+
+```bash
+# 建图（用原来的）
+ros2 launch vehicle_bringup diff_drive_nav.launch.py
+# 建完保存
+ros2 run nav2_map_server map_saver_cli -f ~/vehicle_ws/src/vehicle_bringup/maps/my_map
+
+# 导航（用新的）
+ros2 launch vehicle_bringup diff_drive_nav_map.launch.py \
+    map:=/home/lhh/vehicle_ws/src/vehicle_bringup/maps/my_map.yaml
+```
+
+### 教训
+
+- **lifecycle 节点有依赖时不能用 autostart**，必须按依赖顺序激活
+- 调用 lifecycle 服务必须检查返回值，`success=false` 要报错停止
+- 同样的 `frame does not exist` 错误，建图模式和导航模式根因完全不同
+- 先用手动命令验证链路（`ros2 lifecycle set /xxx activate`），确认可行再自动化

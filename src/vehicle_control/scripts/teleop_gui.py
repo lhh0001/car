@@ -46,7 +46,7 @@ class TeleopGUI(Node):
 
         # ---- parameters ----
         self.declare_parameter('max_linear', 2.0)    # m/s
-        self.declare_parameter('max_angular', 2.0)   # rad/s
+        self.declare_parameter('max_angular', 8.0)   # rad/s
         self.declare_parameter('publish_rate', 50.0) # Hz
         self.declare_parameter('startup_delay', 0.5) # s
 

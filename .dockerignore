@@ -1,0 +1,16 @@
+# 本地编译缓存 / IDE 产物,不要打进镜像
+**/.pio
+**/build
+**/.vscode
+**/.idea
+
+# Git
+.git
+.gitignore
+
+# Python 缓存
+**/__pycache__
+**/*.pyc
+
+# 日志
+*.log
