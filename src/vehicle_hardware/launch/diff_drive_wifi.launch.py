@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""
-Launch real diff-drive robot (ESP32 hardware).
+"""Launch only the ESP32 Wi-Fi hardware bridge.
 
-Usage:
-  ros2 launch vehicle_hardware diff_drive_real.launch.py
-  ros2 launch vehicle_hardware diff_drive_real.launch.py port:=/dev/ttyUSB1
+Robot description publishing and teleoperation are intentionally composed by
+vehicle_bringup / vehicle_control, so this launch can be reused by mapping and
+navigation without creating duplicate TF publishers or /cmd_vel producers.
 """
 import os
 from ament_index_python.packages import get_package_share_directory
@@ -12,53 +11,32 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('host', default_value='192.168.4.1',
                               description='ESP32 wifi host'),
+        DeclareLaunchArgument('port', default_value='8888',
+                              description='ESP32 UDP command/telemetry port'),
         OpaqueFunction(function=_launch_setup),
     ])
 
 
 def _launch_setup(context):
-    desc_pkg = get_package_share_directory('vehicle_description')
     hw_pkg = get_package_share_directory('vehicle_hardware')
-    params = os.path.join(hw_pkg, 'config', 'wifi_bridge.yaml')
+    params = os.path.join(hw_pkg, 'config', 'motor_wifi.yaml')
     host = LaunchConfiguration('host').perform(context)
-
-
-    # xacro → URDF
-    import xacro
-    xacro_path = os.path.join(desc_pkg, 'urdf', 'diff_drive_robot.xacro')
-    doc = xacro.process_file(xacro_path)
-    robot_desc = {'robot_description': doc.toxml()}
-
     return [
-        # Serial bridge: PC ↔ ESP32
         Node(
             package='vehicle_hardware',
             executable='wifi_bridge.py',
             name='wifi_bridge',
             output='screen',
-            parameters=[params, {'host':host,'port': 8888}],
-        ),
-
-        # Robot State Publisher
-        Node(
-            package='robot_state_publisher',
-            executable='robot_state_publisher',
-            name='robot_state_publisher',
-            output='screen',
-            parameters=[robot_desc],
-        ),
-
-        # Teleop GUI
-        Node(
-            package='vehicle_control',
-            executable='teleop_gui.py',
-            name='teleop_gui',
-            output='screen',
+            parameters=[params, {
+                'host': host,
+                'port': ParameterValue(LaunchConfiguration('port'), value_type=int),
+            }],
         ),
     ]

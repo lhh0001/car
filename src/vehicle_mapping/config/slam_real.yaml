@@ -1,0 +1,4 @@
+# 覆盖 slam_mapping.yaml：真实传感器使用系统时间。
+slam_toolbox:
+  ros__parameters:
+    use_sim_time: false

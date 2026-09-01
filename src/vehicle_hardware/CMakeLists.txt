@@ -9,8 +9,8 @@ install(DIRECTORY launch config
 )
 
 install(PROGRAMS
-  scripts/serial_bridge.py
   scripts/wifi_bridge.py
+  scripts/esp32_pwm_test.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

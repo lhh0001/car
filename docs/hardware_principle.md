@@ -91,22 +91,22 @@
 ESP32 DevKit V1 (30-pin)
 
           ┌────────────────────────┐
-     EN  ─┤○ ○                    ├── GND
-    VP   ─┤○ ○                    ├── GPIO23
-    VN   ─┤○ ○ L: ENA=26          ├── GPIO22
-   GPIO34─┤○ ○ L: IN1=27          ├── TX0(1)
-   GPIO35─┤○ ○ L: IN2=14          ├── RX0(3)
-   GPIO32─┤○ ○ R: IN3=32          ├── GPIO21
-   GPIO33─┤○ ○ R: IN4=33          ├── GND
-   GPIO25─┤○ ○ R: ENB=25          ├── GPIO19 ← R: ENC_B
-   GPIO26─┤○ ○  ENA               ├── GPIO18 ← R: ENC_A
-   GPIO27─┤○ ○  IN1               ├── GPIO5
-   GPIO14─┤○ ○  IN2               ├── GPIO17
-    GPIO12─┤○ ○                   ├── GPIO16
-     GND  ─┤○ ○                   ├── GPIO4
-    VIN   ─┤○ ○                   ├── GPIO0
-    EN    ─┤○ ○                   ├── GPIO2
-    3V3   ─┤○ ○                   ├── GPIO15
+     EN  ─┤○ ○                     ├── GND
+    VP   ─┤○ ○                     ├── GPIO23
+    VN   ─┤○ ○ L: ENA=26           ├── GPIO22
+   GPIO34─┤○ ○ L: IN1=27           ├── TX0(1)
+   GPIO35─┤○ ○ L: IN2=14           ├── RX0(3)
+   GPIO32─┤○ ○ R: IN3=32           ├── GPIO21
+   GPIO33─┤○ ○ R: IN4=33           ├── GND
+   GPIO25─┤○ ○ R: ENB=25           ├── GPIO19 ← R: ENC_B
+   GPIO26─┤○ ○  ENA                ├── GPIO18 ← R: ENC_A
+   GPIO27─┤○ ○  IN1                ├── GPIO5
+   GPIO14─┤○ ○  IN2                ├── GPIO17
+   GPIO12─┤○ ○                     ├── GPIO16
+    GND  ─┤○ ○                     ├── GPIO4
+   VIN   ─┤○ ○                     ├── GPIO0
+   EN    ─┤○ ○                     ├── GPIO2
+   3V3   ─┤○ ○                     ├── GPIO15
           └────────────────────────┘
     USB 口在这边（CH340 串口芯片）
 ```
@@ -164,12 +164,12 @@ N20 电机尾部有一个霍尔传感器编码器：
 
 ```
 ┌─────────────────────────────────────────┐
-│  setup() — 只执行一次                     │
-│  ├─ Serial.begin(115200)     配置串口     │
-│  ├─ pinMode(OUTPUT)          配置 GPIO    │
-│  ├─ ledcSetup + ledcAttach   配置 PWM     │
-│  ├─ attachInterrupt          配置编码器中  │
-│  └─ stop()                   初始停车      │
+│  setup() — 只执行一次                    │
+│  ├─ Serial.begin(115200)     配置串口    │
+│  ├─ pinMode(OUTPUT)          配置 GPIO   │
+│  ├─ ledcSetup + ledcAttach   配置 PWM    │
+│  ├─ attachInterrupt          配置编码器中│
+│  └─ stop()                   初始停车    │
 └─────────────────────────────────────────┘
               │
               ▼

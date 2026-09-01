@@ -58,7 +58,7 @@ class GraphMonitor(Node):
         # Detect new/removed nodes
         current_names = {n[0] for n in nodes}
         new_nodes = current_names - self._prev_nodes
-        gone_nodes = self._prev_nodes - current_nodes
+        gone_nodes = self._prev_nodes - current_names
         self._prev_nodes = current_names
 
         # Detect new/removed topics

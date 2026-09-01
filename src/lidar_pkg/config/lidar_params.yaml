@@ -1,0 +1,11 @@
+lidar_node:
+  ros__parameters:
+    # 实车：ESP32 将 TTL 雷达透明转发到 TCP 8889。
+    transport: "tcp"
+    tcp_host: "192.168.4.1"
+    tcp_port: 8889
+    # 使用原装 USB-TTL 调试时改为 transport: "serial"，并填写实际端口。
+    port_name: "/dev/lidar"
+    # Must match vehicle_description's fixed LiDAR frame so SLAM can resolve
+    # the transform from lidar_link to base_footprint.
+    frame_id: "lidar_link"

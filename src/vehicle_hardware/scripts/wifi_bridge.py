@@ -15,6 +15,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist, TransformStamped, Quaternion
 from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Imu
 from tf2_ros import TransformBroadcaster
 import socket
 import select
@@ -86,6 +87,7 @@ class WifiBridge(Node):
         self.declare_parameter('encoder_cpr', ENCODER_CPR)
         self.declare_parameter('wheel_radius', WHEEL_RADIUS)
         self.declare_parameter('wheel_base', WHEEL_BASE)
+        self.declare_parameter('imu_frame', 'base_link')
         
         #打开传输通道
         self._sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -100,6 +102,7 @@ class WifiBridge(Node):
         #订阅/发布话题
         self._cmd_sub = self.create_subscription(Twist, '/cmd_vel', self._on_cmd, 10)
         self._odom_pub = self.create_publisher(Odometry, '/odom', 10)
+        self._imu_pub = self.create_publisher(Imu, '/imu', 20)
         self._tf_br     = TransformBroadcaster(self)
 
         self._odom_x = 0.0
@@ -156,19 +159,23 @@ class WifiBridge(Node):
         return max(-PWM_MAX, min(PWM_MAX, pwm))
     
     def _read_socket(self):
-        """50Hz 定时读取串口数据，有就处理，没有就跳过."""
-        ready, _, _ = select.select([self._sock], [], [], 0)
-        if not ready:
-            return
-        data = self._sock.recv(1024).decode(errors="ignore")
-        for line in data.split("\n"):
-            line =line.strip()
-            if not line:
-                continue
-            if line.startswith('E '):
-                self._on_encoder(line)
-            elif line.startswith('I '):
-                self._on_imu(line)
+        """读取本轮所有已到达的 UDP 数据报，防止 IMU 挤掉编码器数据。"""
+        while True:
+            ready, _, _ = select.select([self._sock], [], [], 0)
+            if not ready:
+                return
+            try:
+                data = self._sock.recv(1024).decode(errors="ignore")
+            except BlockingIOError:
+                return
+            for line in data.split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                if line.startswith('E '):
+                    self._on_encoder(line)
+                elif line.startswith('I '):
+                    self._on_imu(line)
     
     
     def _on_encoder(self, line: str):
@@ -263,8 +270,33 @@ class WifiBridge(Node):
 
 
     def _on_imu(self, line: str):
-        """IMU 数据（预留，暂不发布）."""
-        pass  # TODO: 发布 sensor_msgs/Imu
+        """发布 ESP32 的原始 IMU 数据。
+
+        协议单位必须是 m/s² 和 rad/s：
+        I <ax> <ay> <az> <gx> <gy> <gz>
+        """
+        parts = line.split()
+        if len(parts) != 7:
+            self.get_logger().warn(f'Invalid IMU packet: {line}')
+            return
+        try:
+            ax, ay, az, gx, gy, gz = (float(value) for value in parts[1:])
+        except ValueError:
+            self.get_logger().warn(f'Invalid IMU values: {line}')
+            return
+
+        imu = Imu()
+        imu.header.stamp = self.get_clock().now().to_msg()
+        imu.header.frame_id = self.get_parameter('imu_frame').value
+        imu.linear_acceleration.x = ax
+        imu.linear_acceleration.y = ay
+        imu.linear_acceleration.z = az
+        imu.angular_velocity.x = gx
+        imu.angular_velocity.y = gy
+        imu.angular_velocity.z = gz
+        # ESP32 当前只上传加速度和角速度；未估计姿态。
+        imu.orientation_covariance[0] = -1.0
+        self._imu_pub.publish(imu)
 
     @staticmethod
     def _yaw_to_quat(yaw: float) -> Quaternion:
@@ -290,7 +322,10 @@ def main():
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        # launch 在收到 SIGINT 时可能已经关闭默认 context；重复 shutdown
+        # 会抛出 RCLError，掩盖正常的停车与退出流程。
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':
@@ -307,5 +342,3 @@ if __name__ == '__main__':
 
 
         
-
-

@@ -4,8 +4,8 @@ project(vehicle_description)
 
 find_package(ament_cmake REQUIRED)
 
-# Pure description package: only URDF models and mesh assets
-install(DIRECTORY urdf meshes
+# Do not list a missing meshes/ directory: ament treats it as a build error.
+install(DIRECTORY launch urdf
   DESTINATION share/${PROJECT_NAME}
 )
 

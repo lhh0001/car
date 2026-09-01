@@ -1,13 +1,3 @@
 {
-    "urdf-visualizer.packages": {
-        "vehicle_description": "/home/lhh/vehicle_ws/install/vehicle_description/share/vehicle_description"
-    },
-    "python.autoComplete.extraPaths": [
-        "/opt/ros/foxy/lib/python3.8/site-packages"
-    ],
-    "python.analysis.extraPaths": [
-        "/opt/ros/foxy/lib/python3.8/site-packages"
-    ],
-    "ROS2.distro": "humble",
-    "cmake.sourceDirectory": "/home/lhh/vehicle_ws/src/vehicle_bringup"
+    "cmake.sourceDirectory": "/home/lhh001/workspace/car/src/lidar_pkg"
 }

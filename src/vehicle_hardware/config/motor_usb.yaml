@@ -1,7 +1,0 @@
-serial_bridge:
-  ros__parameters:
-    port: /dev/esp32
-    baud: 115200
-    encoder_cpr: 700.0          # 编码器每转脉冲数（轮端）
-    wheel_radius: 0.04          # 轮子半径 (m)
-    wheel_base: 0.20            # 左右轮距 (m)

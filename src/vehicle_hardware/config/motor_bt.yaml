@@ -1,5 +1,0 @@
-serial_bridge:
-  ros__parameters:
-    port: /dev/rfcomm0
-    baud: 0
-    

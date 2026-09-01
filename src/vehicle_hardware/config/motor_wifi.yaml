@@ -4,6 +4,7 @@ wifi_bridge:
       encoder_cpr: 700.0          # 编码器每转脉冲数（轮端）
       wheel_radius: 0.04          # 轮子半径 (m)
       wheel_base: 0.13           # 左右轮距 (m)
+      imu_frame: base_link        # IMU 安装方向确认前，先与车身坐标对齐
       pid_kp: 16.0               # PID 比例增益
       pid_ki: 2.0                # PID 积分增益
       pid_kd: 0.0                # PID 微分增益（先不加）

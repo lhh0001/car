@@ -1,29 +1,34 @@
-# Vehicle Simulation Workspace
+# Differential-Drive Robot Workspace
 
-ROS2 Humble + Gazebo Classic 11 
+ROS2 Humble differential-drive robot: simulation, Wi-Fi hardware, mapping and navigation.
 
 ## 工程结构
 
 ```
 vehicle_ws/
 ├── src/
-│   ├── vehicle_description/    # 纯描述: URDF/XACRO 模型 + 网格资源
-│   ├── vehicle_bringup/        # 启动 + 配置: launch files, worlds, YAML
-│   └── vehicle_control/        # 控制脚本: 转向控制器, 遥控 GUI
+│   ├── lidar_pkg/              # ESP32 TCP 雷达转发与 /scan 解析
+│   ├── vehicle_description/    # 差速小车 URDF/XACRO
+│   ├── vehicle_simulation/     # Gazebo world、插件与仿真基础启动
+│   ├── vehicle_hardware/       # ESP32 Wi-Fi、IMU、编码器和电机接口
+│   ├── vehicle_mapping/        # slam_toolbox 参数、建图启动与地图
+│   ├── vehicle_navigation/     # AMCL、map_server、Nav2 参数与启动
+│   ├── vehicle_control/        # 遥控与话题监控
+│   └── vehicle_bringup/        # 只组合上述功能包的场景启动
 ├── .github/workflows/          # CI/CD (GitHub Actions)
 ├── Dockerfile                  # 容器化构建
 ├── docker-compose.yml          # 一键启动
 └── .pre-commit-config.yaml     # 代码质量检查
 ```
 
-**设计原则**: 描述 / 启动 / 控制 三层分离，每个包职责单一。
+**设计原则**: 每个包只负责一种能力；包之间只经 ROS topic、TF、service/action 协作。
+详见 [架构说明](docs/architecture.md)。
 
 ## 机器人模型
 
 | 模型 | 包 | 类型 | 用途 |
 |------|-----|------|------|
 | `diff_drive_robot.xacro` | vehicle_description | 两轮差速 | SLAM + Nav2 自主导航 |
-| `ferrari.urdf` | vehicle_description | 四轮 Ackermann | 仿真驾驶、转向控制 |
 
 ## 快速开始
 
@@ -60,11 +65,8 @@ ros2 launch vehicle_bringup diff_drive_sim.launch.py
 # 差速小车 + SLAM + Nav2 自主导航
 ros2 launch vehicle_bringup diff_drive_nav.launch.py
 
-# Ferrari 阿克曼驾驶仿真
-ros2 launch vehicle_bringup ferrari_sim.launch.py
-
-# 带参数启动
-ros2 launch vehicle_bringup ferrari_sim.launch.py world:=my_world.world x_pose:=5.0 use_slam:=false
+# 真车建图（电脑连接 ESP32 的 car-esp32 热点后）
+ros2 launch vehicle_bringup real_mapping.launch.py
 
 # 手动遥控（独立启动）
 ros2 run vehicle_control teleop_gui.py --ros-args -p max_linear:=5.0 -p max_angular:=3.0
@@ -108,10 +110,9 @@ Push 到 main/PR 时自动触发：
 
 | 包 | 参数 | 默认值 | 说明 |
 |-----|------|--------|------|
-| vehicle_control | `wheelbase` | 2.64 | 轴距 (m) |
-| vehicle_control | `max_steer_angle` | 0.6 | 最大转向角 (rad) |
-| vehicle_control | `deadband` | 0.02 | 速度死区 |
-| vehicle_bringup | `world` | test_yard.world | Gazebo 世界文件 |
+| vehicle_control | `max_linear` | 2.0 | 手动控制最大线速度 (m/s) |
+| vehicle_control | `max_angular` | 8.0 | 手动控制最大角速度 (rad/s) |
+| vehicle_simulation | `world` | test_yard.world | Gazebo 世界文件 |
 | vehicle_bringup | `x_pose/y_pose/z_pose` | 0/0/0.05 | 初始位姿 |
 
 ## 架构
@@ -135,9 +136,10 @@ local_costmap (障碍物代价地图)
 pip install pre-commit && pre-commit install
 
 # 添加新机器人模型
-# 1. 在 vehicle_description/urdf/ 添加 URDF/XACRO
-# 2. 在 vehicle_bringup/launch/ 添加 launch 文件
-# 3. 在 vehicle_bringup/config/ 添加对应 YAML 配置
+# 1. 在 vehicle_description/urdf/ 添加真实车共同模型
+# 2. 仿真插件/世界放 vehicle_simulation/
+# 3. SLAM 参数放 vehicle_mapping/config/；Nav2 参数放 vehicle_navigation/config/
+# 4. 在 vehicle_bringup/launch/ 组合成用户命令
 ```
 
 ## License

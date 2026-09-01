@@ -1,17 +1,17 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>vehicle_description</name>
+  <name>vehicle_simulation</name>
   <version>0.1.0</version>
-  <description>URDF/XACRO model for the differential-drive robot.</description>
+  <description>Gazebo Classic assets and base simulation launch for the differential-drive robot.</description>
   <maintainer email="lhh@todo.todo">lhh</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <!-- Only dependencies needed to load, publish and process descriptions -->
-  <exec_depend>urdf</exec_depend>
-  <exec_depend>xacro</exec_depend>
+  <exec_depend>vehicle_description</exec_depend>
+  <exec_depend>gazebo_ros</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>xacro</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

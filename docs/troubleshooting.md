@@ -1,5 +1,10 @@
 # 车辆仿真项目改造踩坑记录
 
+> 说明：这是历史排障记录，保留用于追溯旧问题。当前包边界和启动入口以
+> [`architecture.md`](architecture.md) 与各包 README 为准；其中涉及
+> `vehicle_bringup/config`、`vehicle_bringup/worlds`、`activate_navigation.py`
+> 的旧路径/脚本已经不再使用。
+
 ## 1. 报错：WaitForTopic 不存在
 
 **报错信息：**
@@ -118,13 +123,13 @@ Unable to find mesh file: /home/lhh/vehicle_ws/install/...
 
 ## 5. 包结构调整后 build 失败
 
-**现象：** 把 launch/config/scripts 移到新包后，原来引用
-`vehicle_description` 的路径全失效。
+**现象：** 把 launch/config/scripts 移到新包后，原来的资源路径失效。
 
 **解决步骤：**
 1. 每个新包创建独立的 `package.xml` + `CMakeLists.txt`
-2. launch 文件中用 `get_package_share_directory('vehicle_bringup')` 替代原来的 `vehicle_description`
-3. script 的 package 引用从 `vehicle_description` 改为 `vehicle_control`
+2. 资源一律从所属包解析：URDF→`vehicle_description`，world→`vehicle_simulation`，
+   SLAM→`vehicle_mapping`，Nav2→`vehicle_navigation`
+3. `vehicle_bringup` 只用 `IncludeLaunchDescription` 组合这些功能包
 
 ---
 
@@ -192,7 +197,10 @@ pkill -9 -f gazebo && sleep 1 && pkill -9 -f gazebo
 
 ---
 
-## 8. 加载已有地图导航：map 帧不存在
+## 8. （历史记录）加载已有地图导航：map 帧不存在
+
+> 下方记录描述的是已删除的 `activate_navigation.py` 方案。当前
+> `vehicle_navigation` 使用标准 Nav2 lifecycle manager；不要再创建或运行旧脚本。
 
 **报错信息：**
 ```
@@ -290,7 +298,7 @@ SLAM 建图:
 | 文件 | 作用 |
 |------|------|
 | `launch/diff_drive_nav_map.launch.py` | 导航模式 launch（加载已有地图） |
-| `scripts/activate_navigation.py` | 顺序激活 map_server → AMCL |
+| `vehicle_navigation/launch/localization.launch.py` | 启动 map_server、AMCL 与标准 lifecycle manager |
 | `config/nav2_params.yaml` | 补了 AMCL 参数段（粒子滤波 + 初始位姿） |
 | `launch/diff_drive_nav.launch.py` | 原文件不动（SLAM + Nav2 建图） |
 
@@ -300,11 +308,11 @@ SLAM 建图:
 # 建图（用原来的）
 ros2 launch vehicle_bringup diff_drive_nav.launch.py
 # 建完保存
-ros2 run nav2_map_server map_saver_cli -f ~/vehicle_ws/src/vehicle_bringup/maps/my_map
+ros2 run nav2_map_server map_saver_cli -f ~/vehicle_ws/src/vehicle_mapping/maps/my_map
 
 # 导航（用新的）
 ros2 launch vehicle_bringup diff_drive_nav_map.launch.py \
-    map:=/home/lhh/vehicle_ws/src/vehicle_bringup/maps/my_map.yaml
+    map:=/home/lhh/vehicle_ws/src/vehicle_mapping/maps/my_map.yaml
 ```
 
 ### 教训

@@ -4,6 +4,7 @@
 build/
 install/
 log/
+.pio/
 
 # Python
 __pycache__/
@@ -17,6 +18,7 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+*.Zone.Identifier
 
 # Colcon
 .colcon/

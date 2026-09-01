@@ -1,0 +1,4 @@
+# 覆盖 slam_mapping.yaml：Gazebo 使用 /clock。
+slam_toolbox:
+  ros__parameters:
+    use_sim_time: true
