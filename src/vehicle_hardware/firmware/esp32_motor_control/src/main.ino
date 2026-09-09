@@ -12,7 +12,7 @@
  *
  * 引脚接线：
  *   L298N: ENA=26, IN1=27, IN2=14, IN3=32, IN4=33, ENB=25
- *   编码器: 左A=34, 左B=35, 右A=18, 右B=19
+ *   编码器: 左A=13, 左B=23, 右A=18, 右B=19
  */
 
 #include <WiFi.h>
@@ -60,7 +60,8 @@ const int ENA = 26, IN1 = 27, IN2 = 14;  // 左电机
 const int ENB = 25, IN3 = 32, IN4 = 33;  // 右电机
 
 // ===== 编码器引脚 =====
-const int ENC_L_A = 34, ENC_L_B = 35;
+// 左编码器不再使用 GPIO34/35：它们没有内部上拉，会令霍尔信号悬空。
+const int ENC_L_A = 13, ENC_L_B = 23;
 const int ENC_R_A = 18, ENC_R_B = 19;
 
 // ===== 编码器计数器 =====
