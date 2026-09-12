@@ -65,8 +65,15 @@ ros2 launch vehicle_bringup diff_drive_sim.launch.py
 # 差速小车 + SLAM + Nav2 自主导航
 ros2 launch vehicle_bringup diff_drive_nav.launch.py
 
-# 真车建图（电脑连接 ESP32 的 car-esp32 热点后）
+# 真车建图：雷达经 ESP32 TCP 转发
 ros2 launch vehicle_bringup real_mapping.launch.py
+
+# 真车建图：雷达用原装 USB 转换器直连电脑
+ros2 launch vehicle_bringup real_mapping.launch.py \
+  lidar_transport:=serial lidar_port_name:=/dev/ttyACM0
+
+# 原生 Linux 中使用已保存的实车建图 RViz 配置
+rviz2 -d "$(ros2 pkg prefix vehicle_mapping)/share/vehicle_mapping/config/real_mapping.rviz"
 
 # 手动遥控（独立启动）
 ros2 run vehicle_control teleop_gui.py --ros-args -p max_linear:=5.0 -p max_angular:=3.0

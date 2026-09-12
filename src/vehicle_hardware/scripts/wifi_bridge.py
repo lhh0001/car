@@ -7,7 +7,8 @@ Reads encoder counts from ESP32, publishes /odom and /tf.
 
 Protocol (UDP, text, newline-delimited):
   PC → ESP32:  M <left_pwm> <right_pwm>
-  ESP32 → PC:  E <left_enc> <right_enc>
+  ESP32 → PC:  E <boot_id> <sequence> <sample_ms> <left_enc> <right_enc>
+               （仍兼容旧版 E <left_enc> <right_enc>）
   ESP32 → PC:  I <ax> <ay> <az> <gx> <gy> <gz>
 """
 import math
@@ -21,9 +22,9 @@ import socket
 import select
 
 
-ENCODER_CPR = 700.0        # 编码器每转圈数（轮端）
-WHEEL_RADIUS   = 0.04       # 轮子半径 (m)，4cm 常见
-WHEEL_BASE     = 0.20       # 左右轮距 (m)
+ENCODER_CPR = 360.0        # A 相 RISING 计数，实测约 358-359 次/轮圈
+WHEEL_RADIUS   = 0.02       # 轮子半径 (m)，实车直径 4 cm
+WHEEL_BASE     = 0.13       # 左右轮中心距 (m)
 PWM_MAX        = 255        # 和固件一致
 
 
@@ -46,19 +47,11 @@ class PID:
     def reset(self):
         self._integral = 0.0
         self._prev_error = 0.0
-        self._prev_time_ns = None
 
-    def step(self, setpoint: float, measurement: float,
-             now_ns: int) -> float:
-        """输入目标值、测量值、当前时间(ns)，输出控制量."""
+    def step(self, setpoint: float, measurement: float, dt: float) -> float:
+        """输入目标值、测量值和设备采样周期，输出控制量。"""
         error = setpoint - measurement
-
-        if self._prev_time_ns is not None:
-            dt = (now_ns - self._prev_time_ns) / 1e9
-            if dt <= 1e-6:
-                dt = 1e-6
-        else:
-            dt = 0.001
+        dt = max(dt, 1e-6)
 
         # 积分 + 限幅（anti-windup）
         self._integral += error * dt
@@ -69,8 +62,6 @@ class PID:
         derivative = (error - self._prev_error) / dt
 
         self._prev_error = error
-        self._prev_time_ns = now_ns
-
         output = (self.kp * error +
                   self.ki * self._integral +
                   self.kd * derivative)
@@ -85,6 +76,8 @@ class WifiBridge(Node):
         
         #声明可调的参数
         self.declare_parameter('encoder_cpr', ENCODER_CPR)
+        self.declare_parameter('left_encoder_direction', 1.0)
+        self.declare_parameter('right_encoder_direction', -1.0)
         self.declare_parameter('wheel_radius', WHEEL_RADIUS)
         self.declare_parameter('wheel_base', WHEEL_BASE)
         self.declare_parameter('imu_frame', 'base_link')
@@ -111,6 +104,12 @@ class WifiBridge(Node):
         self._prev_left_enc  = 0
         self._prev_right_enc = 0
         self._enc_ready = False      # 第一次读到编码器只初始化，不算增量
+        self._encoder_boot_id = None
+        self._prev_encoder_sequence = None
+        self._prev_sample_ms = None
+        self._prev_receive_time = self.get_clock().now()
+        self._last_encoder_time = self.get_clock().now()
+        self._last_pwm = (0, 0)
         self._target_left = 0.0
         self._target_right = 0.0
         self._last_cmd_time = self.get_clock().now()
@@ -125,10 +124,11 @@ class WifiBridge(Node):
         imax = self.get_parameter('pid_integ_max').value
         self._pid_left = PID(kp, ki, kd, PWM_MAX, imax)
         self._pid_right = PID(kp, ki, kd, PWM_MAX, imax)
-        self._prev_time = self.get_clock().now()
 
         # 启动定时轮询 
         self._timer = self.create_timer(0.02, self._read_socket)  # 50 Hz
+        # 固件重启后也要重新注册回传地址；遥测中断时只发停车命令。
+        self._heartbeat_timer = self.create_timer(0.1, self._send_heartbeat)
    
     def _on_cmd(self, msg: Twist):
         v = msg.linear.x  # m/s
@@ -176,19 +176,67 @@ class WifiBridge(Node):
                     self._on_encoder(line)
                 elif line.startswith('I '):
                     self._on_imu(line)
+
+    def _send_motor(self, left: int, right: int):
+        self._last_pwm = (left, right)
+        line = f'M {left} {right}\n'
+        self._sock.sendto(line.encode(), (self._host, self._port))
+
+    def _send_heartbeat(self):
+        now = self.get_clock().now()
+        if (now - self._last_encoder_time).nanoseconds / 1e9 > 0.2:
+            self._target_left = 0.0
+            self._target_right = 0.0
+            self._pid_left.reset()
+            self._pid_right.reset()
+            self._last_pwm = (0, 0)
+        left, right = self._last_pwm
+        self._sock.sendto(
+            f'M {left} {right}\n'.encode(), (self._host, self._port))
+
+    @staticmethod
+    def _int32_delta(current: int, previous: int) -> int:
+        """计算有符号 32 位累计计数器跨越溢出点后的增量。"""
+        return (current - previous + (1 << 31)) % (1 << 32) - (1 << 31)
     
     
     def _on_encoder(self, line: str):
         """解析编码器数据，计算里程计."""
+        now = self.get_clock().now()
         parts = line.split()
-        if len(parts) < 3:
+        boot_id = sequence = sample_ms = None
+        try:
+            if len(parts) == 6:
+                boot_id = int(parts[1], 16)
+                sequence = int(parts[2]) & 0xffffffff
+                sample_ms = int(parts[3]) & 0xffffffff
+                left, right = int(parts[4]), int(parts[5])
+            elif len(parts) == 3:
+                left, right = int(parts[1]), int(parts[2])
+            else:
+                return
+        except ValueError:
+            self.get_logger().warn(f'Invalid encoder packet: {line}')
             return
 
-        now = self.get_clock().now()
-        left  = int(parts[1])
-        right = int(parts[2])
+        if boot_id is not None:
+            if self._encoder_boot_id != boot_id:
+                self._encoder_boot_id = boot_id
+                self._enc_ready = False
+                self._pid_left.reset()
+                self._pid_right.reset()
+                self._last_pwm = (0, 0)
+            elif self._prev_encoder_sequence is not None:
+                sequence_delta = (
+                    sequence - self._prev_encoder_sequence) & 0xffffffff
+                if sequence_delta == 0 or sequence_delta >= 0x80000000:
+                    return
+
+        self._last_encoder_time = now
 
         cpr = self.get_parameter('encoder_cpr').value
+        left_direction = self.get_parameter('left_encoder_direction').value
+        right_direction = self.get_parameter('right_encoder_direction').value
         r   = self.get_parameter('wheel_radius').value
         L   = self.get_parameter('wheel_base').value
 
@@ -196,24 +244,43 @@ class WifiBridge(Node):
             # 第一次读数：初始化基准值，跳过增量计算
             self._prev_left_enc  = left
             self._prev_right_enc = right
-            self._prev_time = now
+            self._prev_receive_time = now
+            self._prev_sample_ms = sample_ms
+            self._prev_encoder_sequence = sequence
             self._enc_ready = True
             return
 
-        d_left  = (left  - self._prev_left_enc)  / cpr * 2 * math.pi
-        d_right = (right - self._prev_right_enc) / cpr * 2 * math.pi
+        d_left = (left_direction *
+                  self._int32_delta(left, self._prev_left_enc) /
+                  cpr * 2 * math.pi)
+        d_right = (right_direction *
+                   self._int32_delta(right, self._prev_right_enc) /
+                   cpr * 2 * math.pi)
         self._prev_left_enc  = left
         self._prev_right_enc = right
 
+        if sample_ms is not None and self._prev_sample_ms is not None:
+            dt = ((sample_ms - self._prev_sample_ms) & 0xffffffff) / 1000.0
+        else:
+            dt = (now - self._prev_receive_time).nanoseconds / 1e9
+        self._prev_sample_ms = sample_ms
+        self._prev_encoder_sequence = sequence
+        self._prev_receive_time = now
+
+        if dt <= 0.0 or dt > 2.0:
+            self._pid_left.reset()
+            self._pid_right.reset()
+            self._send_motor(0, 0)
+            return
+
         d_dist  = (d_right + d_left) / 2.0 * r
         d_yaw   = (d_right - d_left) / L * r
-        dt      = (now - self._prev_time).nanoseconds / 1e9
-        self._prev_time = now
 
         # 更新全局位姿
+        mid_yaw = self._odom_yaw + d_yaw / 2.0
+        self._odom_x += d_dist * math.cos(mid_yaw)
+        self._odom_y += d_dist * math.sin(mid_yaw)
         self._odom_yaw += d_yaw
-        self._odom_x   += d_dist * math.cos(self._odom_yaw)
-        self._odom_y   += d_dist * math.sin(self._odom_yaw)
 
         # 速度
         vx = d_dist / dt if dt > 0 else 0.0
@@ -258,15 +325,15 @@ class WifiBridge(Node):
                and abs(actual_left) < STOP_THRESH and abs(actual_right) < STOP_THRESH:
                 self._pid_left.reset()
                 self._pid_right.reset()
-                line = 'M 0 0\n'
-                self._sock.sendto(line.encode(), (self._host, self._port))
+                self._send_motor(0, 0)
                 return
 
-            pwm_left = int(self._pid_left.step(self._target_left,actual_left,now.nanoseconds))
-            pwm_right = int(self._pid_right.step(self._target_right, actual_right, now.nanoseconds))
+            pwm_left = int(self._pid_left.step(
+                self._target_left, actual_left, dt))
+            pwm_right = int(self._pid_right.step(
+                self._target_right, actual_right, dt))
 
-            line = f'M {pwm_left} {pwm_right}\n'
-            self._sock.sendto(line.encode(), (self._host, self._port))
+            self._send_motor(pwm_left, pwm_right)
 
 
     def _on_imu(self, line: str):
@@ -311,7 +378,12 @@ class WifiBridge(Node):
             self._sock.close()
         except Exception:
             pass
-        super().destroy_node()
+        try:
+            super().destroy_node()
+        except KeyboardInterrupt:
+            # ros2 launch 已在退出时，第二个 SIGINT 不应把正常
+            # 的停车/销毁流程报成节点异常。
+            pass
 
 def main():
     rclpy.init()

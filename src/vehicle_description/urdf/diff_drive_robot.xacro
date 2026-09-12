@@ -1,7 +1,9 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="diff_drive_robot">
 
-  <xacro:property name="wheel_radius" value="0.08"/>
+  <!-- 实车轮子直径 4 cm，左右轮中心距 13 cm。 -->
+  <xacro:property name="wheel_radius" value="0.02"/>
+  <xacro:property name="wheel_separation" value="0.13"/>
   <xacro:property name="wheel_width" value="0.04"/>
   <xacro:property name="body_length" value="0.4"/>
   <xacro:property name="body_width" value="0.25"/>
@@ -11,8 +13,8 @@
 
   <!-- 轮子放置：车身中偏后，左右对称 -->
   <xacro:property name="wheel_x" value="${-body_length/4}"/>
-  <xacro:property name="wheel_y" value="${body_width/2 + wheel_width/2 + 0.005}"/>
-  <xacro:property name="wheel_z" value="${-body_height/2 + wheel_radius  -0.05}"/>
+  <xacro:property name="wheel_y" value="${wheel_separation/2}"/>
+  <xacro:property name="wheel_z" value="${-body_height/2}"/>
 
   <xacro:property name="body_mass" value="10"/>
 
@@ -45,7 +47,7 @@
   <joint name="base_joint" type="fixed">
     <parent link="base_footprint"/>
     <child link="base_link"/>
-    <origin xyz="0 0 ${wheel_radius + body_height/2 + 0.01}" rpy="0 0 0"/>
+    <origin xyz="0 0 ${wheel_radius + body_height/2}" rpy="0 0 0"/>
   </joint>
 
   <!-- ===== base_link ===== -->

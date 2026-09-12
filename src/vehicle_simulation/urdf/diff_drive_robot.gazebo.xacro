@@ -19,7 +19,7 @@
       <robot_base_frame>base_footprint</robot_base_frame>
       <left_joint>left_wheel_joint</left_joint>
       <right_joint>right_wheel_joint</right_joint>
-      <wheel_separation>${2 * wheel_y}</wheel_separation>
+      <wheel_separation>${wheel_separation}</wheel_separation>
       <wheel_diameter>${2 * wheel_radius}</wheel_diameter>
       <max_wheel_torque>20</max_wheel_torque>
       <max_wheel_acceleration>5.0</max_wheel_acceleration>

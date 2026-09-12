@@ -1,8 +1,10 @@
 wifi_bridge:
     ros__parameters:
       host: 192.168.4.1
-      encoder_cpr: 700.0          # 编码器每转脉冲数（轮端）
-      wheel_radius: 0.04          # 轮子半径 (m)
+      encoder_cpr: 360.0          # A 相上升沿实测约 358-359 次/轮圈
+      left_encoder_direction: 1.0
+      right_encoder_direction: -1.0  # 实车前进时右轮原始计数为负
+      wheel_radius: 0.02          # 轮子半径 (m)，实测直径 4 cm
       wheel_base: 0.13           # 左右轮距 (m)
       imu_frame: base_link        # IMU 安装方向确认前，先与车身坐标对齐
       pid_kp: 16.0               # PID 比例增益

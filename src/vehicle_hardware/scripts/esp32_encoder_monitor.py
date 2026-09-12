@@ -26,7 +26,7 @@ def positive_float(value: str) -> float:
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description='只读显示 ESP32 的 E <left_count> <right_count> 编码器遥测。')
+        description='只读显示 ESP32 编码器遥测（兼容新旧 E 报文）。')
     parser.add_argument('--host', default='192.168.4.1', help='ESP32 IP（默认：192.168.4.1）')
     parser.add_argument('--port', type=int, default=8888, help='ESP32 UDP 端口（默认：8888）')
     parser.add_argument('--duration', type=positive_float, default=15.0,
@@ -68,10 +68,15 @@ def main() -> int:
             packet, _ = sock.recvfrom(256)
             for line in packet.decode(errors='ignore').splitlines():
                 fields = line.split()
-                if len(fields) != 3 or fields[0] != 'E':
+                if not fields or fields[0] != 'E':
                     continue
                 try:
-                    current = (int(fields[1]), int(fields[2]))
+                    if len(fields) == 6:
+                        current = (int(fields[4]), int(fields[5]))
+                    elif len(fields) == 3:
+                        current = (int(fields[1]), int(fields[2]))
+                    else:
+                        continue
                 except ValueError:
                     continue
 

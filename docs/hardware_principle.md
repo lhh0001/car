@@ -95,14 +95,14 @@ ESP32 DevKit V1 (30-pin)
     VP   ─┤○ ○                     ├── GPIO23
     VN   ─┤○ ○ L: ENA=26           ├── GPIO22
    GPIO34─┤○ ○ L: IN1=27           ├── TX0(1)
-   GPIO35─┤○ ○ L: IN2=14           ├── RX0(3)
+   GPIO35─┤○ ○                      ├── RX0(3)
    GPIO32─┤○ ○ R: IN3=32           ├── GPIO21
    GPIO33─┤○ ○ R: IN4=33           ├── GND
    GPIO25─┤○ ○ R: ENB=25           ├── GPIO19 ← R: ENC_B
    GPIO26─┤○ ○  ENA                ├── GPIO18 ← R: ENC_A
    GPIO27─┤○ ○  IN1                ├── GPIO5
-   GPIO14─┤○ ○  IN2                ├── GPIO17
-   GPIO12─┤○ ○                     ├── GPIO16
+   GPIO14─┤○ ○  IN2    → LiDAR RX  ├── GPIO17
+   GPIO12─┤○ ○         ← LiDAR TX  ├── GPIO16
     GND  ─┤○ ○                     ├── GPIO4
    VIN   ─┤○ ○                     ├── GPIO0
    EN    ─┤○ ○                     ├── GPIO2
@@ -145,9 +145,8 @@ N20 电机尾部有一个霍尔传感器编码器：
   霍尔传感器 A ──→ 脉冲信号 A (方波)
   霍尔传感器 B ──→ 脉冲信号 B (方波, A 的相位差 90°)
 
-电机转一圈（电机端） → 7 个脉冲 × 减速比 100 → 输出轴 700 个脉冲
-
-所以 ENCODER_CPR = 700（轮子每转一圈，编码器产生 700 个脉冲）
+当前固件只统计 A 相上升沿。实车分别手转约 5 圈，测得左轮约 357.8、
+右轮约 359.0 次/圈，因此使用 ENCODER_CPR = 360。
 
 通过 A/B 相位判断方向：
   A 先于 B 上升 → 正转 → enc_left++
@@ -306,17 +305,17 @@ void set_motor(Motor side, int pwm) {
 给定机器人线速度 v (m/s) 和角速度 ω (rad/s)，
 计算左右轮各自的角速度：
 
-    轮距 L = 0.20m（左右轮间距）
+    轮距 L = 0.13m（左右轮中心距）
 
-    ω_left  = (2v - ω·L) / (2·R)      R = 轮子半径 0.04m
+    ω_left  = (2v - ω·L) / (2·R)      R = 轮子半径 0.02m
     ω_right = (2v + ω·L) / (2·R)
 
 例：直行 v=0.3 m/s, ω=0
-    ω_left = ω_right = (2×0.3) / (2×0.04) = 7.5 rad/s
+    ω_left = ω_right = (2×0.3) / (2×0.02) = 15 rad/s
 
 例：原地左转 v=0, ω=1.57 rad/s (90°/s)
-    ω_left  = (0 - 1.57×0.20) / 0.08 = -3.93 rad/s (反转)
-    ω_right = (0 + 1.57×0.20) / 0.08 = +3.93 rad/s (正转)
+    ω_left  = (0 - 1.57×0.13) / 0.04 ≈ -5.10 rad/s (反转)
+    ω_right = (0 + 1.57×0.13) / 0.04 ≈ +5.10 rad/s (正转)
 ```
 
 ### 5.2 正运动学：编码器 → 里程计
@@ -401,9 +400,11 @@ serial_bridge:
   ros__parameters:
     port: /dev/ttyUSB0          # 串口设备
     baud: 115200                # 波特率（须与 ESP32 一致）
-    encoder_cpr: 700.0          # 编码器每转脉冲数
-    wheel_radius: 0.04          # 轮子半径 (m)
-    wheel_base: 0.20            # 左右轮距 (m)
+    encoder_cpr: 360.0          # A 相上升沿计数，实车标定值
+    left_encoder_direction: 1.0
+    right_encoder_direction: -1.0
+    wheel_radius: 0.02          # 轮子半径 (m)，直径 4 cm
+    wheel_base: 0.13            # 左右轮中心距 (m)
 ```
 
 ### 6.4 启动命令
@@ -544,5 +545,5 @@ ros2 run tf2_tools view_frames
 | 串口延迟 | ~1-2ms |
 | PWM 频率 | 5000 Hz |
 | PWM 精度 | 8-bit (0-255) |
-| 编码器精度 | 700 脉冲/轮圈 |
-| 最小可测位移 | 2π×0.04/700 ≈ 0.36 mm |
+| 编码器精度 | 360 个 A 相上升沿/轮圈 |
+| 最小可测位移 | 2π×0.02/360 ≈ 0.35 mm |
