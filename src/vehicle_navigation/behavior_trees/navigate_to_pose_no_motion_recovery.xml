@@ -1,0 +1,28 @@
+<!--
+  Real-vehicle NavigateToPose tree with no motion-based recovery.
+
+  Planning and control each get one costmap-clear retry.  If either still
+  fails, the action aborts and the controller stops.  In particular, this
+  tree never invokes Spin or BackUp, so a transient perception/localization
+  failure cannot make the physical robot rotate or reverse unexpectedly.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <PipelineSequence name="NavigateWithSafeReplanning">
+      <RateController hz="1.0">
+        <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+          <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+          <ClearEntireCostmap
+            name="ClearGlobalCostmap-Context"
+            service_name="global_costmap/clear_entirely_global_costmap"/>
+        </RecoveryNode>
+      </RateController>
+      <RecoveryNode number_of_retries="1" name="FollowPath">
+        <FollowPath path="{path}" controller_id="FollowPath"/>
+        <ClearEntireCostmap
+          name="ClearLocalCostmap-Context"
+          service_name="local_costmap/clear_entirely_local_costmap"/>
+      </RecoveryNode>
+    </PipelineSequence>
+  </BehaviorTree>
+</root>

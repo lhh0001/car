@@ -11,16 +11,23 @@ wifi_bridge:
       left_motor_direction: -1.0
       right_motor_direction: -1.0
       # 遵循 ROS 约定：+angular.z 为左转，-angular.z 为右转。
-      angular_command_direction: 1.0
+      angular_command_direction: -1.0
       wheel_radius: 0.02          # 轮子半径 (m)，实测直径 4 cm
       wheel_base: 0.13           # 左右轮距 (m)
       imu_frame: base_link        # IMU 安装方向确认前，先与车身坐标对齐
-      pid_kp: 16.0               # PID 比例增益
-      pid_ki: 2.0                # PID 积分增益
+      pid_kp: 8.0                # 配合死区前馈，降低轮速来回振荡
+      pid_ki: 1.0                # 小积分只补偿左右轮负载差
       pid_kd: 0.0                # PID 微分增益（先不加）
-      pid_integ_max: 100.0       # 积分限幅
-      motor_min_pwm: 180         # 提高直行起转力矩
-      motor_max_pwm: 230         # 直行输出上限
-      motor_turn_min_pwm: 210    # 提高转向起转力矩
-      motor_turn_max_pwm: 250    # 转向输出上限
+      pid_integ_max: 30.0        # 限制积分，避免停车前继续推动车轮
+      motor_min_pwm: 170         # 降低直行起步冲击
+      motor_max_pwm: 205         # 限制直行输出
+      motor_turn_min_pwm: 190    # 保留启动扭矩，同时降低原地转向冲量
+      motor_turn_max_pwm: 205    # 限制转向最高输出，减小过冲
       wheel_target_deadband: 0.5 # 小于 0.5 rad/s 的目标视为停车，防止终点爬行
+      turn_target_deadband: 0.05 # 纯旋转不能被直行轮速死区清零
+      motor_min_wheel_rate: 2.5  # 最小稳定轮速估计，rad/s
+      motor_max_wheel_rate: 15.7 # 电机空载最大轮速估计，rad/s
+      wheel_velocity_filter_alpha: 0.30 # 编码器轮速低通系数
+      max_continuous_turn_angle: 3.0 # 单次纯转向上限，约172度
+      turn_direction_check_rate: 0.05 # IMU方向检查最小角速度
+      turn_direction_mismatch_samples: 5 # 连续反向5帧立即停车

@@ -45,16 +45,27 @@ def _launch_setup(context):
         os.path.join(navigation_pkg, 'config', f'nav2_{profile}.yaml'),
     ]
     node_names = [name for _, name in _NAV2_NODES]
-    nodes = [
-        Node(
+    nodes = []
+    for package, executable in _NAV2_NODES:
+        node_params = list(params)
+        if profile == 'real' and executable == 'bt_navigator':
+            node_params.append({
+                'default_nav_to_pose_bt_xml': os.path.join(
+                    navigation_pkg,
+                    'behavior_trees',
+                    'navigate_to_pose_no_motion_recovery.xml'),
+                'default_nav_through_poses_bt_xml': os.path.join(
+                    navigation_pkg,
+                    'behavior_trees',
+                    'navigate_through_poses_no_motion_recovery.xml'),
+            })
+        nodes.append(Node(
             package=package,
             executable=executable,
             name=executable,
             output='screen',
-            parameters=params,
-        )
-        for package, executable in _NAV2_NODES
-    ]
+            parameters=node_params,
+        ))
     nodes.append(
         Node(
             package='nav2_lifecycle_manager',

@@ -1,0 +1,30 @@
+<!--
+  Real-vehicle NavigateThroughPoses tree with no motion-based recovery.
+
+  Humble loads this tree while activating bt_navigator even when the robot is
+  normally commanded with NavigateToPose. Keep it free of Spin and BackUp so
+  the behavior server does not need either motion-producing action.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <PipelineSequence name="NavigateThroughPosesWithSafeReplanning">
+      <RateController hz="0.333">
+        <RecoveryNode number_of_retries="1" name="ComputePathThroughPoses">
+          <ReactiveSequence>
+            <RemovePassedGoals input_goals="{goals}" output_goals="{goals}" radius="0.7"/>
+            <ComputePathThroughPoses goals="{goals}" path="{path}" planner_id="GridBased"/>
+          </ReactiveSequence>
+          <ClearEntireCostmap
+            name="ClearGlobalCostmap-Context"
+            service_name="global_costmap/clear_entirely_global_costmap"/>
+        </RecoveryNode>
+      </RateController>
+      <RecoveryNode number_of_retries="1" name="FollowPath">
+        <FollowPath path="{path}" controller_id="FollowPath"/>
+        <ClearEntireCostmap
+          name="ClearLocalCostmap-Context"
+          service_name="local_costmap/clear_entirely_local_costmap"/>
+      </RecoveryNode>
+    </PipelineSequence>
+  </BehaviorTree>
+</root>

@@ -8,29 +8,91 @@ controller_server:
       required_movement_radius: 0.05
       movement_time_allowance: 20.0
     goal_checker:
-      xy_goal_tolerance: 0.20
-      yaw_goal_tolerance: 0.17
+      xy_goal_tolerance: 0.06
+      # 真车只判断目标位置；忽略 RViz 目标箭头的最终朝向。
+      yaw_goal_tolerance: 3.14
       stateful: true
     FollowPath:
-      min_vel_x: 0.0
-      max_vel_x: 0.10
-      max_vel_theta: 0.45
-      min_speed_theta: 0.10
-      min_speed_xy: 0.0
-      max_speed_xy: 0.10
-      acc_lim_x: 0.20
-      acc_lim_theta: 0.60
-      decel_lim_x: -0.20
-      decel_lim_theta: -0.80
-      vx_samples: 12
-      vtheta_samples: 24
-      sim_time: 1.0
-      xy_goal_tolerance: 0.20
-      trans_stopped_velocity: 0.03
-      GoalAlign.scale: 0.0
-      RotateToGoal.scale: 100.0
-      RotateToGoal.slowing_factor: 8.0
-      RotateToGoal.lookahead_time: -1.0
+      # 真车在电脑端使用 MPPI，直接在差速运动模型下采样并评价轨迹。
+      plugin: "nav2_mppi_controller::MPPIController"
+      time_steps: 60
+      model_dt: 0.05
+      batch_size: 2000
+      iteration_count: 1
+      vx_std: 0.02
+      vy_std: 0.0
+      wz_std: 0.25
+      vx_max: 0.05
+      vx_min: 0.0
+      vy_max: 0.0
+      wz_max: 0.30
+      temperature: 0.3
+      gamma: 0.015
+      motion_model: "DiffDrive"
+      prune_distance: 0.8
+      max_robot_pose_search_dist: 1.0
+      transform_tolerance: 0.20
+      retry_attempt_limit: 1
+      reset_period: 1.0
+      regenerate_noises: false
+      visualize: false
+      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic", "TwirlingCritic", "VelocityDeadbandCritic"]
+      ConstraintCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+      CostCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+        critical_cost: 300.0
+        # 通用代价地图使用 robot_radius（圆形模型），没有多边形 footprint。
+        consider_footprint: false
+        collision_cost: 1000000.0
+        near_goal_distance: 0.20
+      GoalCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 6.0
+        threshold_to_consider: 0.8
+      PathAlignCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 12.0
+        max_path_occupancy_ratio: 0.05
+        trajectory_point_step: 2
+        threshold_to_consider: 0.30
+        offset_from_furthest: 5
+        use_path_orientations: false
+      PathFollowCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 8.0
+        offset_from_furthest: 4
+        threshold_to_consider: 0.8
+      PathAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+        offset_from_furthest: 4
+        threshold_to_consider: 0.30
+        max_angle_to_furthest: 1.0
+        forward_preference: true
+      PreferForwardCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 8.0
+        threshold_to_consider: 0.30
+      TwirlingCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+      VelocityDeadbandCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 35.0
+        # 底盘低速死区：倾向于输出 0 或可真正驱动轮子的速度，避免抖动。
+        deadband_velocities: [0.04, 0.0, 0.10]
 local_costmap:
   local_costmap:
     ros__parameters:
@@ -59,17 +121,24 @@ planner_server:
 behavior_server:
   ros__parameters:
     use_sim_time: false
+    # 真车禁用会主动移动车体的 Spin/BackUp 恢复动作。
+    behavior_plugins: ["wait"]
 bt_navigator:
   ros__parameters:
     use_sim_time: false
+    # 真车当前只使用 RViz 的单目标导航。禁用 NavigateThroughPoses，避免它
+    # 在启动时加载 Humble 默认的 Spin/BackUp 恢复树并依赖已禁用的 spin 服务。
+    navigators: ["navigate_to_pose"]
+    navigate_to_pose:
+      plugin: "nav2_bt_navigator/NavigateToPoseNavigator"
 velocity_smoother:
   ros__parameters:
     use_sim_time: false
     smoothing_frequency: 20.0
-    max_velocity: [0.10, 0.0, 0.8]
-    min_velocity: [-0.05, 0.0, -0.8]
-    max_accel: [0.20, 0.0, 1.0]
-    max_decel: [-0.20, 0.0, -1.0]
+    max_velocity: [0.05, 0.0, 0.30]
+    min_velocity: [-0.02, 0.0, -0.30]
+    max_accel: [0.10, 0.0, 0.35]
+    max_decel: [-0.18, 0.0, -0.50]
     feedback: "CLOSED_LOOP"
     odom_topic: /odom
 amcl:

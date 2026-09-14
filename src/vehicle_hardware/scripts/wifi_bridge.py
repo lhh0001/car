@@ -127,6 +127,14 @@ class WifiBridge(Node):
         self._target_left = 0.0
         self._target_right = 0.0
         self._turning = False
+        self._filtered_left_speed = 0.0
+        self._filtered_right_speed = 0.0
+        self._velocity_filter_ready = False
+        self._continuous_turn_angle = 0.0
+        self._turn_last_imu_time = None
+        self._turn_expected_sign = 0.0
+        self._turn_direction_mismatch_count = 0
+        self._turn_safety_latched = False
         self._last_cmd_time = self.get_clock().now()
         self.declare_parameter('pid_kp', 10.0)
         self.declare_parameter('pid_ki', 2.0)
@@ -137,6 +145,13 @@ class WifiBridge(Node):
         self.declare_parameter('motor_turn_min_pwm', 210)
         self.declare_parameter('motor_turn_max_pwm', 250)
         self.declare_parameter('wheel_target_deadband', 0.5)
+        self.declare_parameter('turn_target_deadband', 0.05)
+        self.declare_parameter('motor_min_wheel_rate', 2.5)
+        self.declare_parameter('motor_max_wheel_rate', 15.7)
+        self.declare_parameter('wheel_velocity_filter_alpha', 0.30)
+        self.declare_parameter('max_continuous_turn_angle', 3.0)
+        self.declare_parameter('turn_direction_check_rate', 0.05)
+        self.declare_parameter('turn_direction_mismatch_samples', 5)
 
         kp = self.get_parameter('pid_kp').value
         ki = self.get_parameter('pid_ki').value
@@ -155,7 +170,26 @@ class WifiBridge(Node):
         # 遵循 ROS REP-103：+angular.z 对应从上方看逆时针（左转）。
         w = (msg.angular.z *
              self.get_parameter('angular_command_direction').value)  # rad/s
-        self._turning = not math.isclose(msg.angular.z, 0.0, abs_tol=1e-6)
+        # 只有几乎没有直线速度的原地旋转才使用较高的转向死区。
+        # 路径跟踪时通常同时有 v 和 w，若也套用转向最小 PWM，会使
+        # 两侧轮子一起突然加速，表现为不沿轨迹直接前冲。
+        was_turning = self._turning
+        self._turning = (
+            abs(v) < 0.005 and
+            not math.isclose(msg.angular.z, 0.0, abs_tol=1e-3))
+        if not self._turning:
+            self._continuous_turn_angle = 0.0
+            self._turn_last_imu_time = None
+            self._turn_expected_sign = 0.0
+            self._turn_direction_mismatch_count = 0
+            self._turn_safety_latched = False
+        elif not was_turning:
+            self._continuous_turn_angle = 0.0
+            self._turn_last_imu_time = None
+            self._turn_direction_mismatch_count = 0
+            self._turn_safety_latched = False
+        if self._turning:
+            self._turn_expected_sign = 1.0 if msg.angular.z > 0.0 else -1.0
 
         # 差速模型: v_l = (2v - w*L) / 2R,  v_r = (2v + w*L) / 2R
         wheel_sep = self.get_parameter('wheel_base').value
@@ -165,11 +199,17 @@ class WifiBridge(Node):
 
         # Nav2 接近目标时会给出很小的非零速度。对有较大机械死区的
         # 电机，强行把这种命令提升到最小 PWM 会直接冲过目标。
+        deadband_parameter = (
+            'turn_target_deadband' if self._turning
+            else 'wheel_target_deadband')
         deadband = max(0.0, float(
-            self.get_parameter('wheel_target_deadband').value))
+            self.get_parameter(deadband_parameter).value))
         if abs(v_left) < deadband:
             v_left = 0.0
         if abs(v_right) < deadband:
+            v_right = 0.0
+        if self._turning and self._turn_safety_latched:
+            v_left = 0.0
             v_right = 0.0
 
         # 键盘命令会在前进、原地转向和后退之间离散切换。目标变化时
@@ -234,10 +274,9 @@ class WifiBridge(Node):
         line = f'M {physical_left} {physical_right}\n'
         self._sock.send(line.encode())
 
-    def _apply_motor_limits(self, pwm: float, target: float,
-                            measurement: float,
+    def _apply_motor_limits(self, correction: float, target: float,
                             turning: bool = False) -> int:
-        """Apply measured startup dead-zone and a conservative test limit."""
+        """Combine dead-zone feed-forward with closed-loop PI correction."""
         if math.isclose(target, 0.0, abs_tol=1e-6):
             return 0
 
@@ -250,20 +289,21 @@ class WifiBridge(Node):
         min_pwm = max(0, min(PWM_MAX, min_pwm))
         max_pwm = max(min_pwm, min(PWM_MAX, max_pwm))
 
-        # 已达到或超过目标轮速时必须撤掉驱动力。旧逻辑会在 PID 要求
-        # 减速时仍强制输出同方向最小 PWM，导致车辆越过目标还在加速。
         direction = 1 if target > 0.0 else -1
-        moving_in_target_direction = measurement * direction > 0.0
-        if (moving_in_target_direction and
-                abs(measurement) >= abs(target)):
-            return 0
-        if pwm * direction <= 0.0:
-            return 0
+        min_rate = max(0.0, float(
+            self.get_parameter('motor_min_wheel_rate').value))
+        max_rate = max(min_rate + 1e-6, float(
+            self.get_parameter('motor_max_wheel_rate').value))
+        ratio = (abs(target) - min_rate) / (max_rate - min_rate)
+        ratio = min(1.0, max(0.0, ratio))
+        feed_forward = min_pwm + ratio * (max_pwm - min_pwm)
 
-        # 只有实际轮速低于目标、确实需要驱动时，才补偿机械死区。
-        if abs(pwm) < min_pwm:
-            pwm = direction * min_pwm
-        return int(max(-max_pwm, min(max_pwm, pwm)))
+        # PI 的负修正可以把输出平滑降到死区以下，让车轮自然减速；不能
+        # 再强制抬回 min_pwm，否则会形成 0/min_pwm 的开关振荡。
+        effort = direction * feed_forward + correction
+        if effort * direction <= 0.0:
+            return 0
+        return int(max(-max_pwm, min(max_pwm, effort)))
 
     def _send_heartbeat(self):
         now = self.get_clock().now()
@@ -306,6 +346,7 @@ class WifiBridge(Node):
             if self._encoder_boot_id != boot_id:
                 self._encoder_boot_id = boot_id
                 self._enc_ready = False
+                self._velocity_filter_ready = False
                 self._pid_left.reset()
                 self._pid_right.reset()
                 self._last_pwm = (0, 0)
@@ -364,6 +405,7 @@ class WifiBridge(Node):
         self._prev_receive_time = now
 
         if dt <= 0.0 or dt > 2.0:
+            self._velocity_filter_ready = False
             self._pid_left.reset()
             self._pid_right.reset()
             self._send_motor(0, 0)
@@ -414,8 +456,23 @@ class WifiBridge(Node):
                 self._target_right = 0.0
                 self._turning = False
                 
-            actual_left=d_left/dt
-            actual_right=d_right/dt
+            raw_left = d_left / dt
+            raw_right = d_right / dt
+            alpha = min(1.0, max(0.01, float(
+                self.get_parameter('wheel_velocity_filter_alpha').value)))
+            if not self._velocity_filter_ready:
+                self._filtered_left_speed = raw_left
+                self._filtered_right_speed = raw_right
+                self._velocity_filter_ready = True
+            else:
+                self._filtered_left_speed = (
+                    alpha * raw_left +
+                    (1.0 - alpha) * self._filtered_left_speed)
+                self._filtered_right_speed = (
+                    alpha * raw_right +
+                    (1.0 - alpha) * self._filtered_right_speed)
+            actual_left = self._filtered_left_speed
+            actual_right = self._filtered_right_speed
 
             # 停车检测：目标为0且实际轮速接近0时，直接发0并复位PID
             # 这样能消除积分残留和编码器噪声导致的微动/蜂鸣
@@ -430,12 +487,10 @@ class WifiBridge(Node):
             pwm_left = self._apply_motor_limits(
                 self._pid_left.step(self._target_left, actual_left, dt),
                 self._target_left,
-                actual_left,
                 self._turning)
             pwm_right = self._apply_motor_limits(
                 self._pid_right.step(self._target_right, actual_right, dt),
                 self._target_right,
-                actual_right,
                 self._turning)
 
             self._send_motor(pwm_left, pwm_right)
@@ -457,8 +512,44 @@ class WifiBridge(Node):
             self.get_logger().warn(f'Invalid IMU values: {line}')
             return
 
+        now = self.get_clock().now()
+        if self._turning and not self._turn_safety_latched:
+            if self._turn_last_imu_time is not None:
+                dt = (now - self._turn_last_imu_time).nanoseconds * 1e-9
+                if 0.0 < dt < 0.2:
+                    self._continuous_turn_angle += gz * dt
+            self._turn_last_imu_time = now
+
+            check_rate = max(0.0, float(
+                self.get_parameter('turn_direction_check_rate').value))
+            if abs(gz) >= check_rate and self._turn_expected_sign != 0.0:
+                if gz * self._turn_expected_sign < 0.0:
+                    self._turn_direction_mismatch_count += 1
+                else:
+                    self._turn_direction_mismatch_count = 0
+
+            mismatch_limit = max(1, int(self.get_parameter(
+                'turn_direction_mismatch_samples').value))
+            max_turn = max(0.1, float(self.get_parameter(
+                'max_continuous_turn_angle').value))
+            wrong_direction = (
+                self._turn_direction_mismatch_count >= mismatch_limit)
+            excessive_turn = abs(self._continuous_turn_angle) >= max_turn
+            if wrong_direction or excessive_turn:
+                self._turn_safety_latched = True
+                self._target_left = 0.0
+                self._target_right = 0.0
+                self._pid_left.reset()
+                self._pid_right.reset()
+                self._send_motor(0, 0)
+                reason = ('direction mismatch' if wrong_direction
+                          else 'continuous turn limit')
+                self.get_logger().error(
+                    f'Pure-turn safety stop: {reason}, '
+                    f'integrated={self._continuous_turn_angle:.3f} rad')
+
         imu = Imu()
-        imu.header.stamp = self.get_clock().now().to_msg()
+        imu.header.stamp = now.to_msg()
         imu.header.frame_id = self.get_parameter('imu_frame').value
         imu.linear_acceleration.x = ax
         imu.linear_acceleration.y = ay
