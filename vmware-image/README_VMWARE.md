@@ -1,5 +1,17 @@
 # Vehicle ROS VMware 镜像
 
+## Windows 一键下载、导入并启动
+
+在 PowerShell 中运行：
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass -Force
+irm https://raw.githubusercontent.com/lhh0001/car/artifacts/vmware-ubuntu22.04-5f949a5/vmware-image/install-and-start-vm.ps1 -OutFile "$env:TEMP\install-and-start-vm.ps1"
+& "$env:TEMP\install-and-start-vm.ps1"
+```
+
+脚本会检查 Git、下载并校验 OVA、调用 VMware OVF Tool 导入、设置 NAT 网络并启动虚拟机。运行前需要安装 VMware Workstation Pro。
+
 镜像在 Git 中保存为多个 90 MB 分片。克隆本分支后先合并：
 
 ```bash
