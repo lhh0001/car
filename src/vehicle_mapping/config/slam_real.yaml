@@ -2,3 +2,9 @@
 slam_toolbox:
   ros__parameters:
     use_sim_time: false
+    # 真车低速建图：默认 0.5 m / 0.5 rad 阈值会让后续扫描长时间被跳过。
+    minimum_travel_distance: 0.02
+    minimum_travel_heading: 0.05
+    minimum_time_interval: 0.2
+    map_update_interval: 0.5
+    transform_publish_period: 0.02

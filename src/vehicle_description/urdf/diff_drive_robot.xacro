@@ -1,12 +1,20 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="diff_drive_robot">
 
-  <!-- 实车轮子直径 4 cm，左右轮中心距 13 cm。 -->
-  <xacro:property name="wheel_radius" value="0.02"/>
-  <xacro:property name="wheel_separation" value="0.13"/>
-  <xacro:property name="wheel_width" value="0.04"/>
-  <xacro:property name="body_length" value="0.4"/>
-  <xacro:property name="body_width" value="0.25"/>
+  <!-- 默认使用实车尺寸；Gazebo 可通过 Xacro 参数覆盖视觉/物理尺寸。 -->
+  <xacro:arg name="wheel_radius" default="0.02"/>
+  <xacro:arg name="wheel_separation" default="0.13"/>
+  <xacro:arg name="wheel_width" default="0.015"/>
+  <xacro:arg name="body_length" default="0.20"/>
+  <xacro:arg name="body_width" default="0.13"/>
+  <!-- 实车雷达相对车体 +X 顺时针约 37.5 度；仿真启动时覆盖为 0。 -->
+  <xacro:arg name="lidar_yaw" default="-0.654498469"/>
+  <xacro:property name="wheel_radius" value="$(arg wheel_radius)"/>
+  <xacro:property name="wheel_separation" value="$(arg wheel_separation)"/>
+  <xacro:property name="wheel_width" value="$(arg wheel_width)"/>
+  <xacro:property name="body_length" value="$(arg body_length)"/>
+  <xacro:property name="body_width" value="$(arg body_width)"/>
+  <xacro:property name="lidar_yaw" value="$(arg lidar_yaw)"/>
   <xacro:property name="body_height" value="0.08"/>
   <xacro:property name="caster_radius" value="0.03"/>
   <xacro:property name="pole_height" value="0.15"/>
@@ -94,7 +102,7 @@
   <joint name="caster_joint" type="fixed">
     <parent link="base_link"/>
     <child link="caster_link"/>
-    <origin xyz="${body_length/2 - 0.02} 0 ${-body_height/2 - caster_radius + 0.002}" rpy="0 0 0"/>
+    <origin xyz="${body_length/2 - 0.02} 0 ${caster_radius - wheel_radius - body_height/2}" rpy="0 0 0"/>
   </joint>
 
   <!-- ===== 支柱 + LiDAR ===== -->
@@ -121,7 +129,7 @@
   <joint name="lidar_joint" type="fixed">
     <parent link="pole"/>
     <child link="lidar_link"/>
-    <origin xyz="0 0 ${pole_height/2 + 0.02}" rpy="0 0 0"/>
+    <origin xyz="0 0 ${pole_height/2 + 0.02}" rpy="0 0 ${lidar_yaw}"/>
   </joint>
 
 </robot>

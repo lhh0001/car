@@ -16,7 +16,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist, TransformStamped, Quaternion
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Imu
+from sensor_msgs.msg import Imu, JointState
 from tf2_ros import TransformBroadcaster
 import socket
 import select
@@ -73,11 +73,16 @@ class WifiBridge(Node):
         super().__init__("wifi_bridge")
         self.declare_parameter("host", "192.168.4.1")
         self.declare_parameter("port", 8888)
+        self.declare_parameter("bind_host", "192.168.4.2")
         
         #声明可调的参数
         self.declare_parameter('encoder_cpr', ENCODER_CPR)
         self.declare_parameter('left_encoder_direction', 1.0)
         self.declare_parameter('right_encoder_direction', -1.0)
+        self.declare_parameter('odom_linear_direction', 1.0)
+        self.declare_parameter('left_motor_direction', -1.0)
+        self.declare_parameter('right_motor_direction', -1.0)
+        self.declare_parameter('angular_command_direction', 1.0)
         self.declare_parameter('wheel_radius', WHEEL_RADIUS)
         self.declare_parameter('wheel_base', WHEEL_BASE)
         self.declare_parameter('imu_frame', 'base_link')
@@ -88,14 +93,18 @@ class WifiBridge(Node):
 
         self._host=self.get_parameter("host").value
         self._port=self.get_parameter("port").value
-        self._sock.bind(("0.0.0.0",self._port))
+        self._bind_host = self.get_parameter("bind_host").value
+        self._sock.bind((self._bind_host,self._port))
+        self._sock.connect((self._host,self._port))
         # 启动心跳：告诉 ESP32 PC 的 IP，否则 ESP32 不发编码器，PID 永远不跑
-        self._sock.sendto(b'M 0 0\n', (self._host, self._port))
+        self._sock.send(b'M 0 0\n')
 
         #订阅/发布话题
         self._cmd_sub = self.create_subscription(Twist, '/cmd_vel', self._on_cmd, 10)
         self._odom_pub = self.create_publisher(Odometry, '/odom', 10)
         self._imu_pub = self.create_publisher(Imu, '/imu', 20)
+        self._joint_state_pub = self.create_publisher(
+            JointState, '/joint_states', 10)
         self._tf_br     = TransformBroadcaster(self)
 
         self._odom_x = 0.0
@@ -112,11 +121,16 @@ class WifiBridge(Node):
         self._last_pwm = (0, 0)
         self._target_left = 0.0
         self._target_right = 0.0
+        self._turning = False
         self._last_cmd_time = self.get_clock().now()
         self.declare_parameter('pid_kp', 10.0)
         self.declare_parameter('pid_ki', 2.0)
         self.declare_parameter('pid_kd', 0.0)
         self.declare_parameter('pid_integ_max', 100.0)
+        self.declare_parameter('motor_min_pwm', 180)
+        self.declare_parameter('motor_max_pwm', 230)
+        self.declare_parameter('motor_turn_min_pwm', 210)
+        self.declare_parameter('motor_turn_max_pwm', 250)
 
         kp = self.get_parameter('pid_kp').value
         ki = self.get_parameter('pid_ki').value
@@ -132,7 +146,10 @@ class WifiBridge(Node):
    
     def _on_cmd(self, msg: Twist):
         v = msg.linear.x  # m/s
-        w = msg.angular.z  # rad/s
+        # 遵循 ROS REP-103：+angular.z 对应从上方看逆时针（左转）。
+        w = (msg.angular.z *
+             self.get_parameter('angular_command_direction').value)  # rad/s
+        self._turning = not math.isclose(msg.angular.z, 0.0, abs_tol=1e-6)
 
         # 差速模型: v_l = (2v - w*L) / 2R,  v_r = (2v + w*L) / 2R
         wheel_sep = self.get_parameter('wheel_base').value
@@ -140,8 +157,16 @@ class WifiBridge(Node):
         v_left  = (2 * v - w * wheel_sep) / (2 * r)   # rad/s, 轮端角速度
         v_right = (2 * v + w * wheel_sep) / (2 * r)
 
-        self._target_left=v_left
-        self._target_right=v_right
+        # 键盘命令会在前进、原地转向和后退之间离散切换。目标变化时
+        # 必须清掉旧积分，否则前进积累的积分会在按 J/L 后继续驱动车轮，
+        # 造成延迟响应甚至突然加速。
+        if (not math.isclose(v_left, self._target_left, abs_tol=1e-6) or
+                not math.isclose(v_right, self._target_right, abs_tol=1e-6)):
+            self._pid_left.reset()
+            self._pid_right.reset()
+
+        self._target_left = v_left
+        self._target_right = v_right
         self._last_cmd_time = self.get_clock().now()
         # 线性映射到 PWM（简化，不做 PID）
         #pwm_left  = int(self._rads_to_pwm(v_left))
@@ -178,21 +203,47 @@ class WifiBridge(Node):
                     self._on_imu(line)
 
     def _send_motor(self, left: int, right: int):
-        self._last_pwm = (left, right)
-        line = f'M {left} {right}\n'
-        self._sock.sendto(line.encode(), (self._host, self._port))
+        left_direction = self.get_parameter('left_motor_direction').value
+        right_direction = self.get_parameter('right_motor_direction').value
+        physical_left = int(left * left_direction)
+        physical_right = int(right * right_direction)
+        self._last_pwm = (physical_left, physical_right)
+        line = f'M {physical_left} {physical_right}\n'
+        self._sock.send(line.encode())
+
+    def _apply_motor_limits(
+            self, pwm: float, target: float, turning: bool = False) -> int:
+        """Apply measured startup dead-zone and a conservative test limit."""
+        if math.isclose(target, 0.0, abs_tol=1e-6):
+            return 0
+
+        if turning:
+            min_pwm = int(self.get_parameter('motor_turn_min_pwm').value)
+            max_pwm = int(self.get_parameter('motor_turn_max_pwm').value)
+        else:
+            min_pwm = int(self.get_parameter('motor_min_pwm').value)
+            max_pwm = int(self.get_parameter('motor_max_pwm').value)
+        min_pwm = max(0, min(PWM_MAX, min_pwm))
+        max_pwm = max(min_pwm, min(PWM_MAX, max_pwm))
+
+        # PID 输出过小时电机完全不动，积分会持续累积后突然起步。
+        # 直行和转向使用各自的实测死区，避免低输出积累后突然起步。
+        direction = 1 if target > 0.0 else -1
+        if pwm * direction <= 0.0 or abs(pwm) < min_pwm:
+            pwm = direction * min_pwm
+        return int(max(-max_pwm, min(max_pwm, pwm)))
 
     def _send_heartbeat(self):
         now = self.get_clock().now()
         if (now - self._last_encoder_time).nanoseconds / 1e9 > 0.2:
             self._target_left = 0.0
             self._target_right = 0.0
+            self._turning = False
             self._pid_left.reset()
             self._pid_right.reset()
             self._last_pwm = (0, 0)
         left, right = self._last_pwm
-        self._sock.sendto(
-            f'M {left} {right}\n'.encode(), (self._host, self._port))
+        self._sock.send(f'M {left} {right}\n'.encode())
 
     @staticmethod
     def _int32_delta(current: int, previous: int) -> int:
@@ -240,6 +291,19 @@ class WifiBridge(Node):
         r   = self.get_parameter('wheel_radius').value
         L   = self.get_parameter('wheel_base').value
 
+        # Publish measured wheel angles so robot_state_publisher can maintain
+        # base_link -> left_wheel/right_wheel TF for the RViz RobotModel.
+        joint_state = JointState()
+        joint_state.header.stamp = now.to_msg()
+        joint_state.name = ['left_wheel_joint', 'right_wheel_joint']
+        joint_state.position = [
+            math.fmod(left_direction * left / cpr * 2.0 * math.pi,
+                      2.0 * math.pi),
+            math.fmod(right_direction * right / cpr * 2.0 * math.pi,
+                      2.0 * math.pi),
+        ]
+        self._joint_state_pub.publish(joint_state)
+
         if not self._enc_ready:
             # 第一次读数：初始化基准值，跳过增量计算
             self._prev_left_enc  = left
@@ -273,7 +337,8 @@ class WifiBridge(Node):
             self._send_motor(0, 0)
             return
 
-        d_dist  = (d_right + d_left) / 2.0 * r
+        d_dist  = ((d_right + d_left) / 2.0 * r *
+                   self.get_parameter('odom_linear_direction').value)
         d_yaw   = (d_right - d_left) / L * r
 
         # 更新全局位姿
@@ -314,6 +379,7 @@ class WifiBridge(Node):
             if (now - self._last_cmd_time).nanoseconds / 1e9 > 0.5:
                 self._target_left = 0.0
                 self._target_right = 0.0
+                self._turning = False
                 
             actual_left=d_left/dt
             actual_right=d_right/dt
@@ -328,10 +394,14 @@ class WifiBridge(Node):
                 self._send_motor(0, 0)
                 return
 
-            pwm_left = int(self._pid_left.step(
-                self._target_left, actual_left, dt))
-            pwm_right = int(self._pid_right.step(
-                self._target_right, actual_right, dt))
+            pwm_left = self._apply_motor_limits(
+                self._pid_left.step(self._target_left, actual_left, dt),
+                self._target_left,
+                self._turning)
+            pwm_right = self._apply_motor_limits(
+                self._pid_right.step(self._target_right, actual_right, dt),
+                self._target_right,
+                self._turning)
 
             self._send_motor(pwm_left, pwm_right)
 
@@ -374,7 +444,7 @@ class WifiBridge(Node):
 
     def destroy_node(self):
         try:
-            self._sock.sendto(b'M 0 0\n', (self._host, self._port))
+            self._sock.send(b'M 0 0\n')
             self._sock.close()
         except Exception:
             pass

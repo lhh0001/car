@@ -1,3 +1,12 @@
 {
-    "cmake.sourceDirectory": "/home/lhh001/workspace/car/src/lidar_pkg"
+    "cmake.sourceDirectory": "/home/lhh/vehicle_ws/src/lidar_pkg",
+    "ROS2.distro": "humble",
+    "python.autoComplete.extraPaths": [
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ]
 }

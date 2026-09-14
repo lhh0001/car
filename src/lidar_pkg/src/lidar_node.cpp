@@ -304,8 +304,19 @@ private:
     is_shutdown_ = true;
 
     if (fd_ != -1) {
-      std::vector<uint8_t> stop_cmd = {0xA5, 0x00, 0xA5, 0x65, 0xA5, 0x65};
-      write(fd_, stop_cmd.data(), stop_cmd.size());
+      const std::vector<uint8_t> stop_cmd = {0xA5, 0x00, 0xA5, 0x65, 0xA5, 0x65};
+      // The original USB adapter may drop a command if the descriptor is
+      // closed immediately after write().  Repeat it and drain the serial
+      // transmitter before closing, matching the reliable start sequence.
+      for (int attempt = 0; attempt < RETRY_COUNT; ++attempt) {
+        write(fd_, stop_cmd.data(), stop_cmd.size());
+        if (is_serial_transport_) {
+          ioctl(fd_, TCSBRK, 1);  // wait until queued output has drained
+        }
+        if (attempt + 1 < RETRY_COUNT) {
+          usleep(200000);
+        }
+      }
       if (is_serial_transport_) {
         ioctl(fd_, TCSBRK, 1);
       }

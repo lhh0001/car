@@ -11,12 +11,12 @@ slam_toolbox:
     mode: mapping
 
     # 建图参数
-    map_update_interval: 5.0
-    resolution: 0.05
+    map_update_interval: 0.5
+    resolution: 0.02
     min_laser_range: 0.1
     max_laser_range: 8.0
-    minimum_time_interval: 0.5
+    minimum_time_interval: 0.1
 
     # 回环检测
-    do_loop_closing: true
+    do_loop_closing: false
     loop_search_maximum_distance: 5.0

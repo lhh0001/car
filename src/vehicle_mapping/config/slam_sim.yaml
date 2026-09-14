@@ -2,3 +2,5 @@
 slam_toolbox:
   ros__parameters:
     use_sim_time: true
+    # Gazebo LiDAR supports 80 m; use 16 m for simulated mapping.
+    max_laser_range: 16.0

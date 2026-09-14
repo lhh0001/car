@@ -1,9 +1,17 @@
 wifi_bridge:
     ros__parameters:
       host: 192.168.4.1
+      bind_host: 192.168.4.2
       encoder_cpr: 360.0          # A 相上升沿实测约 358-359 次/轮圈
+      # 电机整体反相后，实车前进时编码器原始方向也随之反转。
       left_encoder_direction: 1.0
-      right_encoder_direction: -1.0  # 实车前进时右轮原始计数为负
+      right_encoder_direction: -1.0
+      odom_linear_direction: 1.0
+      # 当前接线下正 PWM 令车体后退，因此两侧电机命令同时反相。
+      left_motor_direction: -1.0
+      right_motor_direction: -1.0
+      # 遵循 ROS 约定：+angular.z 为左转，-angular.z 为右转。
+      angular_command_direction: 1.0
       wheel_radius: 0.02          # 轮子半径 (m)，实测直径 4 cm
       wheel_base: 0.13           # 左右轮距 (m)
       imu_frame: base_link        # IMU 安装方向确认前，先与车身坐标对齐
@@ -11,3 +19,7 @@ wifi_bridge:
       pid_ki: 2.0                # PID 积分增益
       pid_kd: 0.0                # PID 微分增益（先不加）
       pid_integ_max: 100.0       # 积分限幅
+      motor_min_pwm: 180         # 提高直行起转力矩
+      motor_max_pwm: 230         # 直行输出上限
+      motor_turn_min_pwm: 210    # 提高转向起转力矩
+      motor_turn_max_pwm: 250    # 转向输出上限

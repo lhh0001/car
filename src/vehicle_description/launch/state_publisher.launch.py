@@ -26,6 +26,18 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'use_sim_time', default_value='false',
             description='Use Gazebo /clock when true'),
+        DeclareLaunchArgument(
+            'wheel_radius', default_value='0.02',
+            description='Wheel radius passed to the Xacro model'),
+        DeclareLaunchArgument(
+            'wheel_separation', default_value='0.13',
+            description='Distance between left and right wheel centers'),
+        DeclareLaunchArgument('wheel_width', default_value='0.015'),
+        DeclareLaunchArgument('body_length', default_value='0.20'),
+        DeclareLaunchArgument('body_width', default_value='0.13'),
+        DeclareLaunchArgument(
+            'lidar_yaw', default_value='-0.654498469',
+            description='Physical LiDAR yaw relative to base_link, radians'),
         OpaqueFunction(function=_launch_setup),
     ])
 
@@ -37,7 +49,19 @@ def _launch_setup(context):
 
     import xacro
 
-    robot_description = {'robot_description': xacro.process_file(model_path).toxml()}
+    robot_description = {
+        'robot_description': xacro.process_file(
+            model_path,
+            mappings={
+                'wheel_radius': LaunchConfiguration('wheel_radius').perform(context),
+                'wheel_separation': LaunchConfiguration('wheel_separation').perform(context),
+                'wheel_width': LaunchConfiguration('wheel_width').perform(context),
+                'body_length': LaunchConfiguration('body_length').perform(context),
+                'body_width': LaunchConfiguration('body_width').perform(context),
+                'lidar_yaw': LaunchConfiguration('lidar_yaw').perform(context),
+            },
+        ).toxml()
+    }
     return [
         Node(
             package='robot_state_publisher',

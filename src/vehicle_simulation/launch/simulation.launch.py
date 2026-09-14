@@ -19,6 +19,15 @@ def generate_launch_description():
         DeclareLaunchArgument('x_pose', default_value='0.0'),
         DeclareLaunchArgument('y_pose', default_value='0.0'),
         DeclareLaunchArgument('z_pose', default_value='0.05'),
+        DeclareLaunchArgument(
+            'wheel_radius', default_value='0.08',
+            description='Simulation wheel radius in meters'),
+        DeclareLaunchArgument(
+            'wheel_separation', default_value='0.30',
+            description='Simulation left/right wheel center distance'),
+        DeclareLaunchArgument('wheel_width', default_value='0.04'),
+        DeclareLaunchArgument('body_length', default_value='0.40'),
+        DeclareLaunchArgument('body_width', default_value='0.25'),
         OpaqueFunction(function=_launch_setup),
     ])
 
@@ -39,14 +48,29 @@ def _launch_setup(context):
 
     return [
         ExecuteProcess(
-            cmd=['gazebo', '--verbose', '-s', 'libgazebo_ros_factory.so', world_path],
+            cmd=['gzserver', '--verbose', '-s', 'libgazebo_ros_factory.so', world_path],
             output='screen',
         ),
+        # Directly track gzclient instead of using the `gazebo` wrapper, whose
+        # child processes can be orphaned after Ctrl+C and block the next run.
+        TimerAction(period=1.0, actions=[
+            ExecuteProcess(
+                cmd=['gzclient', '--verbose'],
+                output='screen',
+            ),
+        ]),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(state_publisher_launch),
             launch_arguments={
                 'model': simulation_model,
                 'use_sim_time': 'true',
+                'wheel_radius': LaunchConfiguration('wheel_radius'),
+                'wheel_separation': LaunchConfiguration('wheel_separation'),
+                'wheel_width': LaunchConfiguration('wheel_width'),
+                'body_length': LaunchConfiguration('body_length'),
+                'body_width': LaunchConfiguration('body_width'),
+                # Simulated sensor is aligned with the model's +X axis.
+                'lidar_yaw': '0.0',
             }.items(),
         ),
         TimerAction(period=2.0, actions=[
