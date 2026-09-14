@@ -8,22 +8,29 @@ controller_server:
       required_movement_radius: 0.05
       movement_time_allowance: 20.0
     goal_checker:
-      xy_goal_tolerance: 0.08
-      yaw_goal_tolerance: 0.15
+      xy_goal_tolerance: 0.20
+      yaw_goal_tolerance: 0.17
+      stateful: true
     FollowPath:
       min_vel_x: 0.0
       max_vel_x: 0.10
-      max_vel_theta: 0.8
+      max_vel_theta: 0.45
+      min_speed_theta: 0.10
       min_speed_xy: 0.0
       max_speed_xy: 0.10
       acc_lim_x: 0.20
-      acc_lim_theta: 1.0
+      acc_lim_theta: 0.60
       decel_lim_x: -0.20
-      decel_lim_theta: -1.0
+      decel_lim_theta: -0.80
       vx_samples: 12
-      vtheta_samples: 20
+      vtheta_samples: 24
       sim_time: 1.0
-      trans_stopped_velocity: 0.01
+      xy_goal_tolerance: 0.20
+      trans_stopped_velocity: 0.03
+      GoalAlign.scale: 0.0
+      RotateToGoal.scale: 100.0
+      RotateToGoal.slowing_factor: 8.0
+      RotateToGoal.lookahead_time: -1.0
 local_costmap:
   local_costmap:
     ros__parameters:

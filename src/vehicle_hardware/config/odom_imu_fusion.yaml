@@ -9,3 +9,5 @@ odom_imu_fusion:
     bias_samples: 100
     stationary_linear_threshold: 0.01
     stationary_angular_threshold: 0.05
+    stationary_imu_threshold: 0.10
+    bias_adaptation_rate: 0.05

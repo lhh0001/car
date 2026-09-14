@@ -136,6 +136,7 @@ class WifiBridge(Node):
         self.declare_parameter('motor_max_pwm', 230)
         self.declare_parameter('motor_turn_min_pwm', 210)
         self.declare_parameter('motor_turn_max_pwm', 250)
+        self.declare_parameter('wheel_target_deadband', 0.5)
 
         kp = self.get_parameter('pid_kp').value
         ki = self.get_parameter('pid_ki').value
@@ -162,17 +163,34 @@ class WifiBridge(Node):
         v_left  = (2 * v - w * wheel_sep) / (2 * r)   # rad/s, 轮端角速度
         v_right = (2 * v + w * wheel_sep) / (2 * r)
 
+        # Nav2 接近目标时会给出很小的非零速度。对有较大机械死区的
+        # 电机，强行把这种命令提升到最小 PWM 会直接冲过目标。
+        deadband = max(0.0, float(
+            self.get_parameter('wheel_target_deadband').value))
+        if abs(v_left) < deadband:
+            v_left = 0.0
+        if abs(v_right) < deadband:
+            v_right = 0.0
+
         # 键盘命令会在前进、原地转向和后退之间离散切换。目标变化时
         # 必须清掉旧积分，否则前进积累的积分会在按 J/L 后继续驱动车轮，
         # 造成延迟响应甚至突然加速。
-        if (not math.isclose(v_left, self._target_left, abs_tol=1e-6) or
-                not math.isclose(v_right, self._target_right, abs_tol=1e-6)):
+        # 速度平滑器会持续改变目标幅值，不能每次都清积分；只在停车或
+        # 换向时复位，避免控制器退化成始终输出最小 PWM。
+        left_reversing = v_left * self._target_left < 0.0
+        right_reversing = v_right * self._target_right < 0.0
+        stopping = math.isclose(v_left, 0.0, abs_tol=1e-6) and \
+            math.isclose(v_right, 0.0, abs_tol=1e-6)
+        if left_reversing or right_reversing or stopping:
             self._pid_left.reset()
             self._pid_right.reset()
 
         self._target_left = v_left
         self._target_right = v_right
         self._last_cmd_time = self.get_clock().now()
+        if stopping:
+            # 不等待下一帧编码器，零速命令立即送到 ESP32。
+            self._send_motor(0, 0)
         # 线性映射到 PWM（简化，不做 PID）
         #pwm_left  = int(self._rads_to_pwm(v_left))
         #pwm_right = int(self._rads_to_pwm(v_right))
@@ -216,8 +234,9 @@ class WifiBridge(Node):
         line = f'M {physical_left} {physical_right}\n'
         self._sock.send(line.encode())
 
-    def _apply_motor_limits(
-            self, pwm: float, target: float, turning: bool = False) -> int:
+    def _apply_motor_limits(self, pwm: float, target: float,
+                            measurement: float,
+                            turning: bool = False) -> int:
         """Apply measured startup dead-zone and a conservative test limit."""
         if math.isclose(target, 0.0, abs_tol=1e-6):
             return 0
@@ -231,10 +250,18 @@ class WifiBridge(Node):
         min_pwm = max(0, min(PWM_MAX, min_pwm))
         max_pwm = max(min_pwm, min(PWM_MAX, max_pwm))
 
-        # PID 输出过小时电机完全不动，积分会持续累积后突然起步。
-        # 直行和转向使用各自的实测死区，避免低输出积累后突然起步。
+        # 已达到或超过目标轮速时必须撤掉驱动力。旧逻辑会在 PID 要求
+        # 减速时仍强制输出同方向最小 PWM，导致车辆越过目标还在加速。
         direction = 1 if target > 0.0 else -1
-        if pwm * direction <= 0.0 or abs(pwm) < min_pwm:
+        moving_in_target_direction = measurement * direction > 0.0
+        if (moving_in_target_direction and
+                abs(measurement) >= abs(target)):
+            return 0
+        if pwm * direction <= 0.0:
+            return 0
+
+        # 只有实际轮速低于目标、确实需要驱动时，才补偿机械死区。
+        if abs(pwm) < min_pwm:
             pwm = direction * min_pwm
         return int(max(-max_pwm, min(max_pwm, pwm)))
 
@@ -403,10 +430,12 @@ class WifiBridge(Node):
             pwm_left = self._apply_motor_limits(
                 self._pid_left.step(self._target_left, actual_left, dt),
                 self._target_left,
+                actual_left,
                 self._turning)
             pwm_right = self._apply_motor_limits(
                 self._pid_right.step(self._target_right, actual_right, dt),
                 self._target_right,
+                actual_right,
                 self._turning)
 
             self._send_motor(pwm_left, pwm_right)

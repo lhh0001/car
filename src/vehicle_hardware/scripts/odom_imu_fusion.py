@@ -23,6 +23,8 @@ class OdomImuFusion(Node):
         self.declare_parameter('bias_samples', 100)
         self.declare_parameter('stationary_linear_threshold', 0.01)
         self.declare_parameter('stationary_angular_threshold', 0.05)
+        self.declare_parameter('stationary_imu_threshold', 0.10)
+        self.declare_parameter('bias_adaptation_rate', 0.05)
 
         self._pub = self.create_publisher(
             Odometry, self.get_parameter('output_odom_topic').value, 20)
@@ -44,6 +46,14 @@ class OdomImuFusion(Node):
         self._bias_ready = False
         self._wheel_v = 0.0
         self._wheel_w = 0.0
+
+    def _wheels_stationary(self):
+        linear_limit = float(
+            self.get_parameter('stationary_linear_threshold').value)
+        angular_limit = float(
+            self.get_parameter('stationary_angular_threshold').value)
+        return (abs(self._wheel_v) < linear_limit and
+                abs(self._wheel_w) < angular_limit)
 
     @staticmethod
     def _stamp_seconds(stamp):
@@ -68,7 +78,15 @@ class OdomImuFusion(Node):
         self._imu_gz = gz
         self._last_imu_time = self.get_clock().now()
 
+        stationary_imu_limit = float(
+            self.get_parameter('stationary_imu_threshold').value)
+
         if not self._bias_ready:
+            # Only calibrate from a continuous block of genuinely stationary
+            # samples.  A turn during startup must not become the gyro bias.
+            if not self._wheels_stationary() or abs(gz) > stationary_imu_limit:
+                self._bias_values.clear()
+                return
             self._bias_values.append(gz)
             required = int(self.get_parameter('bias_samples').value)
             if len(self._bias_values) >= required:
@@ -78,14 +96,12 @@ class OdomImuFusion(Node):
                     f'IMU yaw-rate bias calibrated: {self._gyro_bias:.6f} rad/s')
             return
 
-        linear_limit = float(
-            self.get_parameter('stationary_linear_threshold').value)
-        angular_limit = float(
-            self.get_parameter('stationary_angular_threshold').value)
-        if (abs(self._wheel_v) < linear_limit and
-                abs(self._wheel_w) < angular_limit and
-                abs(gz - self._gyro_bias) < angular_limit):
-            self._gyro_bias = 0.999 * self._gyro_bias + 0.001 * gz
+        # Zero-rate update: while the wheels and gyro both say the vehicle is
+        # stationary, quickly recover from a bad startup bias calibration.
+        if self._wheels_stationary() and abs(gz) <= stationary_imu_limit:
+            rate = min(1.0, max(0.0,
+                float(self.get_parameter('bias_adaptation_rate').value)))
+            self._gyro_bias = (1.0 - rate) * self._gyro_bias + rate * gz
 
     def _on_wheel_odom(self, msg):
         stamp = self._stamp_seconds(msg.header.stamp)
@@ -110,6 +126,15 @@ class OdomImuFusion(Node):
             weight = min(1.0, max(0.0,
                 float(self.get_parameter('imu_weight').value)))
             fused_w = weight * imu_w + (1.0 - weight) * self._wheel_w
+
+            # Do not integrate yaw drift while the complete drivetrain is
+            # stationary.  Real turns still pass through because wheel_w or
+            # the raw gyro rate leaves the stationary thresholds.
+            stationary_imu_limit = float(
+                self.get_parameter('stationary_imu_threshold').value)
+            if (self._wheels_stationary() and
+                    abs(self._imu_gz) <= stationary_imu_limit):
+                fused_w = 0.0
 
         d_yaw = fused_w * dt
         mid_yaw = self._yaw + 0.5 * d_yaw

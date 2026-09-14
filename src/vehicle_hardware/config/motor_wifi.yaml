@@ -23,3 +23,4 @@ wifi_bridge:
       motor_max_pwm: 230         # 直行输出上限
       motor_turn_min_pwm: 210    # 提高转向起转力矩
       motor_turn_max_pwm: 250    # 转向输出上限
+      wheel_target_deadband: 0.5 # 小于 0.5 rad/s 的目标视为停车，防止终点爬行
