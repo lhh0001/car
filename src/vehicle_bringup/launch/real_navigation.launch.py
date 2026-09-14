@@ -42,7 +42,10 @@ def generate_launch_description():
         ),
         IncludeLaunchDescription(
             _launch('vehicle_hardware', 'diff_drive_wifi.launch.py'),
-            launch_arguments={'host': LaunchConfiguration('host')}.items(),
+            launch_arguments={
+                'host': LaunchConfiguration('host'),
+                'cmd_vel_topic': '/cmd_vel_smoothed',
+            }.items(),
         ),
         IncludeLaunchDescription(
             _launch('lidar_pkg', 'lidar.launch.py'),

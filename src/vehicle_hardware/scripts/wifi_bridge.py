@@ -86,6 +86,7 @@ class WifiBridge(Node):
         self.declare_parameter('wheel_radius', WHEEL_RADIUS)
         self.declare_parameter('wheel_base', WHEEL_BASE)
         self.declare_parameter('imu_frame', 'base_link')
+        self.declare_parameter('cmd_vel_topic', '/cmd_vel')
         self.declare_parameter('odom_topic', '/odom')
         self.declare_parameter('publish_odom_tf', True)
         
@@ -102,7 +103,8 @@ class WifiBridge(Node):
         self._sock.send(b'M 0 0\n')
 
         #订阅/发布话题
-        self._cmd_sub = self.create_subscription(Twist, '/cmd_vel', self._on_cmd, 10)
+        self._cmd_sub = self.create_subscription(
+            Twist, self.get_parameter('cmd_vel_topic').value, self._on_cmd, 10)
         self._odom_pub = self.create_publisher(
             Odometry, self.get_parameter('odom_topic').value, 10)
         self._imu_pub = self.create_publisher(Imu, '/imu', 20)

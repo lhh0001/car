@@ -20,6 +20,8 @@ def generate_launch_description():
                               description='ESP32 wifi host'),
         DeclareLaunchArgument('port', default_value='8888',
                               description='ESP32 UDP command/telemetry port'),
+        DeclareLaunchArgument('cmd_vel_topic', default_value='/cmd_vel',
+                              description='Velocity command topic for the real base'),
         OpaqueFunction(function=_launch_setup),
     ])
 
@@ -38,6 +40,7 @@ def _launch_setup(context):
             parameters=[params, {
                 'host': host,
                 'port': ParameterValue(LaunchConfiguration('port'), value_type=int),
+                'cmd_vel_topic': LaunchConfiguration('cmd_vel_topic'),
                 'odom_topic': '/wheel/odom',
                 'publish_odom_tf': False,
             }],

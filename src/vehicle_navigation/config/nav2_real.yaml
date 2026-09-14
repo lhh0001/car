@@ -2,17 +2,53 @@
 controller_server:
   ros__parameters:
     use_sim_time: false
+    min_x_velocity_threshold: 0.001
+    min_theta_velocity_threshold: 0.001
+    progress_checker:
+      required_movement_radius: 0.05
+      movement_time_allowance: 20.0
+    goal_checker:
+      xy_goal_tolerance: 0.08
+      yaw_goal_tolerance: 0.15
+    FollowPath:
+      min_vel_x: 0.0
+      max_vel_x: 0.10
+      max_vel_theta: 0.8
+      min_speed_xy: 0.0
+      max_speed_xy: 0.10
+      acc_lim_x: 0.20
+      acc_lim_theta: 1.0
+      decel_lim_x: -0.20
+      decel_lim_theta: -1.0
+      vx_samples: 12
+      vtheta_samples: 20
+      sim_time: 1.0
+      trans_stopped_velocity: 0.01
 local_costmap:
   local_costmap:
     ros__parameters:
       use_sim_time: false
+      width: 2.0
+      height: 2.0
+      resolution: 0.02
+      robot_radius: 0.12
+      inflation_layer:
+        inflation_radius: 0.20
+        cost_scaling_factor: 8.0
 global_costmap:
   global_costmap:
     ros__parameters:
       use_sim_time: false
+      resolution: 0.02
+      robot_radius: 0.12
+      inflation_layer:
+        inflation_radius: 0.20
+        cost_scaling_factor: 8.0
 planner_server:
   ros__parameters:
     use_sim_time: false
+    GridBased:
+      tolerance: 0.10
 behavior_server:
   ros__parameters:
     use_sim_time: false
@@ -22,6 +58,13 @@ bt_navigator:
 velocity_smoother:
   ros__parameters:
     use_sim_time: false
+    smoothing_frequency: 20.0
+    max_velocity: [0.10, 0.0, 0.8]
+    min_velocity: [-0.05, 0.0, -0.8]
+    max_accel: [0.20, 0.0, 1.0]
+    max_decel: [-0.20, 0.0, -1.0]
+    feedback: "CLOSED_LOOP"
+    odom_topic: /odom
 amcl:
   ros__parameters:
     use_sim_time: false
