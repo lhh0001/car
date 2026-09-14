@@ -10,6 +10,7 @@ install(DIRECTORY launch config
 
 install(PROGRAMS
   scripts/wifi_bridge.py
+  scripts/odom_imu_fusion.py
   scripts/esp32_pwm_test.py
   scripts/esp32_encoder_monitor.py
   DESTINATION lib/${PROJECT_NAME}

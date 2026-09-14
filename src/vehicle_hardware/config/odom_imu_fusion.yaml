@@ -1,0 +1,11 @@
+odom_imu_fusion:
+  ros__parameters:
+    wheel_odom_topic: /wheel/odom
+    imu_topic: /imu
+    output_odom_topic: /odom
+    imu_weight: 0.9
+    imu_timeout: 0.15
+    max_imu_yaw_rate: 3.5
+    bias_samples: 100
+    stationary_linear_threshold: 0.01
+    stationary_angular_threshold: 0.05

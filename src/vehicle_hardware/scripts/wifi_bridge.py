@@ -86,6 +86,8 @@ class WifiBridge(Node):
         self.declare_parameter('wheel_radius', WHEEL_RADIUS)
         self.declare_parameter('wheel_base', WHEEL_BASE)
         self.declare_parameter('imu_frame', 'base_link')
+        self.declare_parameter('odom_topic', '/odom')
+        self.declare_parameter('publish_odom_tf', True)
         
         #打开传输通道
         self._sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -101,7 +103,8 @@ class WifiBridge(Node):
 
         #订阅/发布话题
         self._cmd_sub = self.create_subscription(Twist, '/cmd_vel', self._on_cmd, 10)
-        self._odom_pub = self.create_publisher(Odometry, '/odom', 10)
+        self._odom_pub = self.create_publisher(
+            Odometry, self.get_parameter('odom_topic').value, 10)
         self._imu_pub = self.create_publisher(Imu, '/imu', 20)
         self._joint_state_pub = self.create_publisher(
             JointState, '/joint_states', 10)
@@ -361,7 +364,8 @@ class WifiBridge(Node):
         t.transform.translation.z = 0.0
         q = self._yaw_to_quat(self._odom_yaw)
         t.transform.rotation = q
-        self._tf_br.sendTransform(t)
+        if self.get_parameter('publish_odom_tf').value:
+            self._tf_br.sendTransform(t)
 
         # 发布 Odometry
         odom = Odometry()
@@ -431,6 +435,12 @@ class WifiBridge(Node):
         imu.angular_velocity.x = gx
         imu.angular_velocity.y = gy
         imu.angular_velocity.z = gz
+        imu.angular_velocity_covariance[0] = 0.01
+        imu.angular_velocity_covariance[4] = 0.01
+        imu.angular_velocity_covariance[8] = 0.0004
+        imu.linear_acceleration_covariance[0] = 0.25
+        imu.linear_acceleration_covariance[4] = 0.25
+        imu.linear_acceleration_covariance[8] = 0.25
         # ESP32 当前只上传加速度和角速度；未估计姿态。
         imu.orientation_covariance[0] = -1.0
         self._imu_pub.publish(imu)

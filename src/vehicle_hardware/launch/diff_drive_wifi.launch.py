@@ -27,6 +27,7 @@ def generate_launch_description():
 def _launch_setup(context):
     hw_pkg = get_package_share_directory('vehicle_hardware')
     params = os.path.join(hw_pkg, 'config', 'motor_wifi.yaml')
+    fusion_params = os.path.join(hw_pkg, 'config', 'odom_imu_fusion.yaml')
     host = LaunchConfiguration('host').perform(context)
     return [
         Node(
@@ -37,6 +38,15 @@ def _launch_setup(context):
             parameters=[params, {
                 'host': host,
                 'port': ParameterValue(LaunchConfiguration('port'), value_type=int),
+                'odom_topic': '/wheel/odom',
+                'publish_odom_tf': False,
             }],
+        ),
+        Node(
+            package='vehicle_hardware',
+            executable='odom_imu_fusion.py',
+            name='odom_imu_fusion',
+            output='screen',
+            parameters=[fusion_params],
         ),
     ]
